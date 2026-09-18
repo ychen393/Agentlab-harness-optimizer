@@ -125,7 +125,7 @@ def test_workflow_config_changes_execution() -> None:
 
 
 def test_missing_domain_input_returns_explicit_trace_error() -> None:
-    trace = CommerceAgent().run(COMMERCE_SCENARIOS[-1].test_case, agent_config())
+    trace = CommerceAgent().run(COMMERCE_SCENARIOS[4].test_case, agent_config())
 
     assert trace.error is not None
     assert "invalid or missing domain input" in trace.error
@@ -158,3 +158,46 @@ def test_deterministic_scenario_executes_with_expected_result() -> None:
     assert result["policy_id"] == scenario.ground_truth.expected_policy_id
     assert result["eligible"] == scenario.ground_truth.expected_eligible
     assert result["gift"] == scenario.ground_truth.expected_gift
+
+
+def test_policy_discovery_executes_multi_step_workflow() -> None:
+    scenario = COMMERCE_SCENARIOS[5]
+
+    trace = CommerceAgent().run(scenario.test_case, agent_config(max_steps=3))
+    result = json.loads(trace.output)["result"]
+
+    assert trace.error is None
+    assert trace.tool_calls == ["search_policy", "check_eligibility"]
+    assert result == {
+        "eligible": True,
+        "gift": "Gift B",
+        "policy_id": "POLICY_B",
+        "reason": "eligible",
+    }
+
+
+def test_max_steps_constrains_policy_discovery_workflow() -> None:
+    scenario = COMMERCE_SCENARIOS[5]
+
+    trace = CommerceAgent().run(scenario.test_case, agent_config(max_steps=2))
+
+    assert trace.error is not None
+    assert "max_steps=2" in trace.error
+    assert trace.tool_calls == ["search_policy"]
+
+
+def test_injected_route_can_use_harness_to_start_multi_step_workflow() -> None:
+    llm = MockLLM(
+        json.dumps(
+            {"tool": "search_policy", "arguments": {"active_on": "2026-02-10"}}
+        )
+    )
+    scenario = COMMERCE_SCENARIOS[5]
+
+    trace = CommerceAgent(llm=llm).run(
+        scenario.test_case, agent_config(max_steps=3)
+    )
+
+    assert trace.error is None
+    assert trace.tool_calls == ["search_policy", "check_eligibility"]
+    assert "CUSTOM PRODUCT LOOKUP DESCRIPTION" in llm.prompts[0]

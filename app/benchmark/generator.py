@@ -161,7 +161,7 @@ provided RequirementSpec. Return a JSON array only; do not use markdown fences.
 Each array item must contain exactly:
 {{
   "id": "any non-empty placeholder",
-  "input": "the test prompt for the research agent",
+  "input": "the test prompt for the Target Agent",
   "category": "one allowed category",
   "difficulty": "one allowed difficulty",
   "requirement_ids": ["one or more existing requirement IDs"]

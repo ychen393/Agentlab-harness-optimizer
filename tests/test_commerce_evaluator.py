@@ -86,6 +86,50 @@ def test_execution_error_fails() -> None:
     assert evaluation.rule_scores["execution_succeeded"] == 0.0
 
 
+def test_expected_missing_information_error_passes() -> None:
+    scenario = COMMERCE_SCENARIOS[4]
+    execution = ExecutionTrace(
+        test_id=scenario.test_case.id,
+        agent_version="commerce-v1",
+        output=json.dumps({"error": "missing purchase details"}),
+        tool_calls=["check_eligibility"],
+        error="missing purchase details",
+    )
+
+    evaluation = evaluate_commerce(scenario, execution)
+
+    assert evaluation.passed is True
+    assert evaluation.rule_scores["execution_succeeded"] == 1.0
+    assert evaluation.rule_scores["missing_information_detected"] == 1.0
+
+
+def test_unexpected_execution_error_fails_expected_error_scenario() -> None:
+    scenario = COMMERCE_SCENARIOS[4]
+    execution = ExecutionTrace(
+        test_id=scenario.test_case.id,
+        agent_version="commerce-v1",
+        output=json.dumps({"error": "network crashed"}),
+        tool_calls=["check_eligibility"],
+        error="network crashed",
+    )
+
+    evaluation = evaluate_commerce(scenario, execution)
+
+    assert evaluation.passed is False
+    assert evaluation.rule_scores["execution_succeeded"] == 0.0
+    assert evaluation.rule_scores["missing_information_detected"] == 0.0
+
+
+def test_expected_error_fails_when_agent_proceeds_as_if_input_is_complete() -> None:
+    scenario = COMMERCE_SCENARIOS[4]
+
+    evaluation = evaluate_commerce(scenario, trace())
+
+    assert evaluation.passed is False
+    assert evaluation.rule_scores["execution_succeeded"] == 0.0
+    assert evaluation.rule_scores["missing_information_detected"] == 0.0
+
+
 def test_evaluator_uses_ground_truth_without_mutating_it() -> None:
     scenario = COMMERCE_SCENARIOS[0]
     snapshot = scenario.model_copy(deep=True)
@@ -138,6 +182,31 @@ def test_target_agent_receives_no_hidden_expected_answers() -> None:
         "expected_eligible",
         "expected_gift",
     } & target.received_fields
+
+
+def test_policy_discovery_scenario_does_not_expose_expected_policy_id() -> None:
+    scenario = COMMERCE_SCENARIOS[5]
+
+    assert "POLICY_B" not in scenario.test_case.input
+    assert "expected_policy_id" not in scenario.test_case.model_dump()
+
+
+def test_policy_discovery_tool_sequence_is_evaluated() -> None:
+    scenario = COMMERCE_SCENARIOS[5]
+    config = AgentConfig(
+        version="commerce-v1",
+        system_prompt="Discover policy before checking eligibility.",
+        tools=[],
+        context=[],
+        workflow=WorkflowConfig(max_steps=3),
+    )
+
+    execution = run_agent(scenario.test_case, config, CommerceAgent())
+    evaluation = evaluate_commerce(scenario, execution)
+
+    assert execution.tool_calls == ["search_policy", "check_eligibility"]
+    assert evaluation.passed is True
+    assert evaluation.rule_scores["correct_tool_sequence"] == 1.0
 
 
 def test_evaluation_preserves_trace_identity() -> None:

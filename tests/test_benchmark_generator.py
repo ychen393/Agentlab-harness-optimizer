@@ -115,6 +115,15 @@ def test_valid_benchmark_generation() -> None:
     assert len(result) == 3
 
 
+def test_generation_prompt_uses_target_agent_terminology() -> None:
+    llm = MockLLM(as_json(valid_cases()))
+
+    generate_tests(requirement_spec(), llm, 3)
+
+    assert "test prompt for the Target Agent" in llm.prompts[0]
+    assert "test prompt for the research agent" not in llm.prompts[0]
+
+
 def test_exact_count_stable_ids_and_llm_ids_ignored() -> None:
     result = generate_tests(requirement_spec(), MockLLM(as_json(valid_cases())), 3)
 

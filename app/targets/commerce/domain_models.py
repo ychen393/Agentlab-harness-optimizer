@@ -50,6 +50,9 @@ class CommerceGroundTruth(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     expected_tool: Literal["search_products", "search_policy", "check_eligibility"]
+    expected_tool_calls: tuple[
+        Literal["search_products", "search_policy", "check_eligibility"], ...
+    ] | None = None
     expected_policy_id: str | None = None
     expected_eligible: bool | None = None
     expected_gift: str | None = None

@@ -38,12 +38,27 @@ class CommerceAgent:
 
         try:
             tool_name, arguments = self._route(test_case.input, agent_config)
-            if agent_config.workflow.max_steps < 2:
-                raise ValueError(
-                    "workflow.max_steps must allow one routing step and one tool step"
+            result = self._run_tool(
+                tool_name, arguments, tool_calls, agent_config.workflow.max_steps
+            )
+
+            if tool_name == "search_policy" and _is_eligibility_request(test_case.input):
+                policies = result if isinstance(result, list) else []
+                if len(policies) != 1:
+                    raise ValueError(
+                        "policy discovery must identify exactly one applicable policy"
+                    )
+                eligibility_arguments = _eligibility_arguments(
+                    test_case.input, policy_id=policies[0]["id"]
                 )
-            tool_calls.append(tool_name)
-            result = self._execute(tool_name, arguments)
+                tool_name = "check_eligibility"
+                result = self._run_tool(
+                    tool_name,
+                    eligibility_arguments,
+                    tool_calls,
+                    agent_config.workflow.max_steps,
+                )
+
             payload: dict[str, Any] = {"tool": tool_name, "result": result}
             if agent_config.workflow.require_citation:
                 payload["sources"] = [f"local_fixture:{tool_name}"]
@@ -60,6 +75,22 @@ class CommerceAgent:
             latency_seconds=perf_counter() - started_at,
             error=error,
         )
+
+    def _run_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        tool_calls: list[str],
+        max_steps: int,
+    ) -> Any:
+        required_step = len(tool_calls) + 2
+        if max_steps < required_step:
+            raise ValueError(
+                f"workflow.max_steps={max_steps} cannot execute workflow step "
+                f"{required_step} for {tool_name}"
+            )
+        tool_calls.append(tool_name)
+        return self._execute(tool_name, arguments)
 
     def _route(
         self, user_input: str, agent_config: AgentConfig
@@ -111,7 +142,9 @@ def _routing_prompt(user_input: str, agent_config: AgentConfig) -> str:
     context = "\n".join(agent_config.context) or "(none)"
     return f"""{agent_config.system_prompt}
 
-Select exactly one commerce tool for the user input.
+Select the first commerce tool for the user input. For eligibility questions
+without a policy ID, select search_policy so the agent can discover the policy
+before checking eligibility.
 Available tools:
 {tool_catalogue}
 
@@ -128,18 +161,12 @@ User input: {user_input}
 
 def _deterministic_route(user_input: str) -> tuple[str, dict[str, Any]]:
     lowered = user_input.casefold()
-    if "eligible" in lowered or "eligibility" in lowered or "gift" in lowered:
+    if _is_eligibility_request(user_input):
         policy_match = re.search(r"policy_[a-z]", user_input, re.IGNORECASE)
         date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_input)
-        amount_match = re.search(r"(?:amount|spend)\s*(?:is|of|:)?\s*(\d+)", lowered)
-        arguments: dict[str, Any] = {}
-        if policy_match:
-            arguments["policy_id"] = policy_match.group(0).upper()
-        if date_match:
-            arguments["purchase_date"] = date_match.group(0)
-        if amount_match:
-            arguments["purchase_amount"] = int(amount_match.group(1))
-        return "check_eligibility", arguments
+        if not policy_match and date_match:
+            return "search_policy", {"active_on": date_match.group(0)}
+        return "check_eligibility", _eligibility_arguments(user_input)
     if "policy" in lowered or "promotion" in lowered:
         policy_match = re.search(r"policy_[a-z]", user_input, re.IGNORECASE)
         date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_input)
@@ -148,6 +175,33 @@ def _deterministic_route(user_input: str) -> tuple[str, dict[str, Any]]:
             "active_on": date_match.group(0) if date_match else None,
         }
     return "search_products", {"query": user_input}
+
+
+def _is_eligibility_request(user_input: str) -> bool:
+    lowered = user_input.casefold()
+    return any(term in lowered for term in ("eligible", "eligibility", "qualify", "gift"))
+
+
+def _eligibility_arguments(
+    user_input: str, policy_id: str | None = None
+) -> dict[str, Any]:
+    lowered = user_input.casefold()
+    policy_match = re.search(r"policy_[a-z]", user_input, re.IGNORECASE)
+    date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_input)
+    amount_match = re.search(
+        r"(?:amount|spend|paid|for)\s*(?:is|of|:)?\s*(\d+)", lowered
+    )
+    arguments: dict[str, Any] = {}
+    resolved_policy_id = policy_id or (
+        policy_match.group(0).upper() if policy_match else None
+    )
+    if resolved_policy_id:
+        arguments["policy_id"] = resolved_policy_id
+    if date_match:
+        arguments["purchase_date"] = date_match.group(0)
+    if amount_match:
+        arguments["purchase_amount"] = int(amount_match.group(1))
+    return arguments
 
 
 def _json_default(value: Any) -> Any:

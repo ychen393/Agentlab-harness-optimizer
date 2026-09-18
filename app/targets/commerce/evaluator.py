@@ -42,11 +42,21 @@ def evaluate_commerce(
 def _evaluate_rules(
     ground_truth: CommerceGroundTruth, trace: ExecutionTrace
 ) -> list[RuleCheckResult]:
+    missing_information_detected = _is_missing_information_error(trace.error)
+    execution_behavior_correct = (
+        missing_information_detected
+        if ground_truth.expected_error
+        else trace.error is None
+    )
     checks = [
         _result(
             "execution_succeeded",
-            trace.error is None,
-            "Target execution returned an error." if trace.error else None,
+            execution_behavior_correct,
+            (
+                "Expected missing-information behavior was not detected."
+                if ground_truth.expected_error
+                else "Target execution returned an unexpected error."
+            ),
         ),
         _result(
             "required_tool_called",
@@ -54,6 +64,16 @@ def _evaluate_rules(
             f"Required tool {ground_truth.expected_tool!r} was not called.",
         ),
     ]
+
+    if ground_truth.expected_tool_calls is not None:
+        expected_calls = list(ground_truth.expected_tool_calls)
+        checks.append(
+            _result(
+                "correct_tool_sequence",
+                trace.tool_calls == expected_calls,
+                f"Expected tool sequence {expected_calls!r}, got {trace.tool_calls!r}.",
+            )
+        )
 
     payload = _parse_payload(trace.output) if trace.error is None else None
     result = payload.get("result") if isinstance(payload, dict) else None
@@ -91,12 +111,22 @@ def _evaluate_rules(
         checks.append(
             _result(
                 "missing_information_detected",
-                trace.error is not None,
+                missing_information_detected,
                 "Missing-information scenario did not produce an explicit error.",
             )
         )
 
     return checks
+
+
+def _is_missing_information_error(error: str | None) -> bool:
+    if error is None:
+        return False
+    normalized = error.casefold()
+    return any(
+        marker in normalized
+        for marker in ("missing", "required", "incomplete", "not enough information")
+    )
 
 
 def _parse_payload(output: str) -> dict[str, Any] | None:

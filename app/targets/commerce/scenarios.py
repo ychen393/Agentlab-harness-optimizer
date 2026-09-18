@@ -82,4 +82,24 @@ COMMERCE_SCENARIOS: tuple[CommerceScenario, ...] = (
             expected_error=True,
         ),
     ),
+    CommerceScenario(
+        id="CS6",
+        test_case=TestCase(
+            id="CT6",
+            input=(
+                "My order was paid on 2026-02-10 for 650 RMB. "
+                "Which promotion applies, and do I qualify for the gift?"
+            ),
+            category="tool_required",
+            difficulty="medium",
+            requirement_ids=["R_ELIGIBILITY", "R_POLICY_DISCOVERY"],
+        ),
+        ground_truth=CommerceGroundTruth(
+            expected_tool="check_eligibility",
+            expected_tool_calls=("search_policy", "check_eligibility"),
+            expected_policy_id="POLICY_B",
+            expected_eligible=True,
+            expected_gift="Gift B",
+        ),
+    ),
 )
