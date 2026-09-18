@@ -9,6 +9,9 @@ __pycache__/
 .venv/
 venv/
 
+# Locally cloned third-party reference repositories
+ecommerce-agent/
+
 # Secrets and local configuration
 .env
 .env.*
