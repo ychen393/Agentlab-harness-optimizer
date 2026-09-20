@@ -67,3 +67,14 @@ class CommerceScenario(BaseModel):
     id: str
     test_case: TestCase
     ground_truth: CommerceGroundTruth
+
+
+class CommerceCoverageReport(BaseModel):
+    """Small explicit coverage view for Commerce exploratory generation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    covered_dimensions: list[str]
+    undercovered_dimensions: list[str]
+    selected_challenge_families: list[str]
+    generated_challenges: list[CommerceScenario]
