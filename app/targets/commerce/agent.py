@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.schemas import AgentConfig, ExecutionTrace, TestCase
+from app.schemas import AgentConfig, ExecutionTrace, TestCase, ToolCallEvent
 
 from .domain_models import EligibilityRequest
 from .tools import (
@@ -33,13 +33,20 @@ class CommerceAgent:
     def run(self, test_case: TestCase, agent_config: AgentConfig) -> ExecutionTrace:
         started_at = perf_counter()
         tool_calls: list[str] = []
+        tool_call_arguments: list[dict[str, Any]] = []
+        tool_events: list[ToolCallEvent] = []
         output = ""
         error: str | None = None
 
         try:
             tool_name, arguments = self._route(test_case.input, agent_config)
             result = self._run_tool(
-                tool_name, arguments, tool_calls, agent_config.workflow.max_steps
+                tool_name,
+                arguments,
+                tool_calls,
+                tool_call_arguments,
+                tool_events,
+                agent_config.workflow.max_steps,
             )
 
             if tool_name == "search_policy" and _is_eligibility_request(test_case.input):
@@ -56,6 +63,8 @@ class CommerceAgent:
                     tool_name,
                     eligibility_arguments,
                     tool_calls,
+                    tool_call_arguments,
+                    tool_events,
                     agent_config.workflow.max_steps,
                 )
 
@@ -65,13 +74,14 @@ class CommerceAgent:
             output = json.dumps(payload, default=_json_default, sort_keys=True)
         except Exception as exc:
             error = _error_message(exc)
-            output = json.dumps({"error": error}, sort_keys=True)
 
         return ExecutionTrace(
             test_id=test_case.id,
             agent_version=agent_config.version,
             output=output,
             tool_calls=tool_calls,
+            tool_call_arguments=tool_call_arguments,
+            tool_events=tool_events,
             latency_seconds=perf_counter() - started_at,
             error=error,
         )
@@ -81,6 +91,8 @@ class CommerceAgent:
         tool_name: str,
         arguments: dict[str, Any],
         tool_calls: list[str],
+        tool_call_arguments: list[dict[str, Any]],
+        tool_events: list[ToolCallEvent],
         max_steps: int,
     ) -> Any:
         required_step = len(tool_calls) + 2
@@ -90,7 +102,29 @@ class CommerceAgent:
                 f"{required_step} for {tool_name}"
             )
         tool_calls.append(tool_name)
-        return self._execute(tool_name, arguments)
+        tool_call_arguments.append(dict(arguments))
+        tool_started_at = perf_counter()
+        try:
+            result = self._execute(tool_name, arguments)
+        except Exception as exc:
+            tool_events.append(
+                ToolCallEvent(
+                    tool_name=tool_name,
+                    arguments=dict(arguments),
+                    error=_error_message(exc),
+                    latency_seconds=perf_counter() - tool_started_at,
+                )
+            )
+            raise
+        tool_events.append(
+            ToolCallEvent(
+                tool_name=tool_name,
+                arguments=dict(arguments),
+                result=result,
+                latency_seconds=perf_counter() - tool_started_at,
+            )
+        )
+        return result
 
     def _route(
         self, user_input: str, agent_config: AgentConfig

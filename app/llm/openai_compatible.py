@@ -47,7 +47,6 @@ class OpenAICompatibleChat:
             {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0,
             }
         ).encode("utf-8")
         request = Request(

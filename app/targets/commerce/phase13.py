@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Sequence
 
-from app.debugger import analyze_failures
+from app.debugger import analyze_failures, analyze_root_cause
 from app.optimizer import run_optimization_cycle
 from app.regression import compare_versions
 from app.runner import run_benchmark
@@ -12,11 +12,18 @@ from app.schemas import (
     ExecutionTrace,
     OptimizationCycleResult,
     RegressionDecision,
+    RootCauseAnalysis,
+    FailurePattern,
+    HarnessPatch,
 )
 
 from .agent import CommerceAgent
 from .domain_models import CommerceScenario
 from .evaluator import evaluate_commerce
+from .patch_strategies import (
+    CommerceToolDescriptionPatchStrategy,
+    commerce_patch_strategies,
+)
 
 
 RouterCall = Callable[[str], str]
@@ -39,7 +46,7 @@ def assess_deterministic_patchability(
         [scenario.test_case], agent_config, CommerceAgent()
     )[0]
     evaluation = evaluate_commerce(scenario, trace)
-    patterns = analyze_failures([evaluation], [trace])
+    patterns = analyze_failures([evaluation], [trace], agent_config)
     if evaluation.passed:
         return OptimizationCycleResult(
             status="no_failures",
@@ -84,6 +91,7 @@ def run_harness_sensitive_cycle(
         agent,
         evaluate_commerce,
         candidate_version=candidate_version,
+        patch_strategies=commerce_patch_strategies(),
     )
 
 
@@ -137,3 +145,28 @@ def validate_harness_candidate(
         candidate_evaluations,
         decision,
     )
+
+
+def analyze_commerce_tool_argument_root_cause(
+    failure_pattern: FailurePattern,
+    traces: Sequence[ExecutionTrace],
+    agent_config: AgentConfig,
+) -> RootCauseAnalysis:
+    """Backward-compatible wrapper around generic contract-based diagnosis."""
+
+    return analyze_root_cause(failure_pattern, list(traces), agent_config)
+
+
+def propose_commerce_tool_description_patch(
+    failure_pattern: FailurePattern,
+    root_cause: RootCauseAnalysis,
+    current_config: AgentConfig,
+) -> HarnessPatch:
+    """Backward-compatible wrapper around the Commerce strategy."""
+
+    patch = CommerceToolDescriptionPatchStrategy().propose(
+        failure_pattern, root_cause, current_config
+    )
+    if patch is None:
+        raise ValueError("Root cause does not support a Commerce tool-description patch")
+    return patch

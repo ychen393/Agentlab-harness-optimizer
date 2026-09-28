@@ -4,7 +4,13 @@ from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from app.debugger import analyze_failures, analyze_root_cause
-from app.optimizer.harness_patch import propose_harness_patch
+from app.optimizer.harness_patch import (
+    PatchProposalRegistry,
+    PatchProposalStrategy,
+    SystemPromptConstraintPatchStrategy,
+    ToolArgumentSchemaPatchStrategy,
+    WorkflowStepLimitPatchStrategy,
+)
 from app.optimizer.patcher import apply_harness_patch
 from app.regression import compare_versions
 from app.runner import TargetAgent, run_benchmark
@@ -35,6 +41,7 @@ def run_optimization_cycle(
     evaluator: Evaluator,
     *,
     candidate_version: str,
+    patch_strategies: Sequence[PatchProposalStrategy] | None = None,
 ) -> OptimizationCycleResult:
     """Run one bounded optimization cycle over the same benchmark items."""
 
@@ -45,7 +52,9 @@ def run_optimization_cycle(
     baseline_traces, baseline_evaluations = _execute_and_evaluate(
         benchmark_items, baseline_config, target_agent, evaluator
     )
-    failure_patterns = analyze_failures(baseline_evaluations, baseline_traces)
+    failure_patterns = analyze_failures(
+        baseline_evaluations, baseline_traces, baseline_config
+    )
     if not failure_patterns:
         return _result(
             status="no_failures",
@@ -71,14 +80,25 @@ def run_optimization_cycle(
 
     failure_pattern = failure_patterns[0]
     root_causes = []
+    registered_strategies = (
+        WorkflowStepLimitPatchStrategy(),
+        ToolArgumentSchemaPatchStrategy(),
+        SystemPromptConstraintPatchStrategy(),
+    )
+    if patch_strategies is not None:
+        registered_strategies += tuple(patch_strategies)
+    registry = PatchProposalRegistry(registered_strategies)
     try:
         root_cause = analyze_root_cause(
             failure_pattern, baseline_traces, baseline_config
         )
         root_causes.append(root_cause)
-        patch = propose_harness_patch(
-            failure_pattern, root_cause, baseline_config
-        )
+        patch = registry.propose(failure_pattern, root_cause, baseline_config)
+        if patch is None:
+            raise ValueError(
+                "No compatible patch proposal strategy for failure category "
+                f"{failure_pattern.category!r}"
+            )
         candidate_config = apply_harness_patch(
             baseline_config, patch, candidate_version
         )

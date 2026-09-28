@@ -34,6 +34,10 @@ def apply_harness_patch(
         return _apply_system_prompt_patch(
             current_config, patch, normalized_version
         )
+    if patch.target_component == "tool_description":
+        return _apply_tool_description_patch(
+            current_config, patch, normalized_version
+        )
     if patch.target_component != "workflow_config":
         raise ValueError(
             "Patch application is not implemented for target component "
@@ -86,4 +90,52 @@ def _apply_system_prompt_patch(
     return current_config.model_copy(
         deep=True,
         update={"version": new_version, "system_prompt": proposed_prompt},
+    )
+
+
+def _apply_tool_description_patch(
+    current_config: AgentConfig,
+    patch: HarnessPatch,
+    new_version: str,
+) -> AgentConfig:
+    expected_keys = {"name", "description"}
+    if (
+        set(patch.old_value) != expected_keys
+        or set(patch.proposed_value) != expected_keys
+    ):
+        raise ValueError("Tool-description patches may modify only one tool description")
+    tool_name = patch.old_value["name"]
+    if tool_name != patch.proposed_value["name"]:
+        raise ValueError("Tool-description patch cannot rename a tool")
+    if not isinstance(tool_name, str) or not tool_name.strip():
+        raise ValueError("Tool-description patch requires a non-empty tool name")
+    current_description = _current_tool_description(current_config, tool_name)
+    if current_description is not None and patch.old_value.get("description") != current_description:
+        raise ValueError("Stale HarnessPatch: tool description does not match AgentConfig")
+    proposed_description = patch.proposed_value["description"]
+    if not isinstance(proposed_description, str) or not proposed_description.strip():
+        raise ValueError("Proposed tool description must be a non-empty string")
+
+    tools = current_config.tools
+    replacement = next(
+        (tool.model_copy(update={"description": proposed_description})
+         for tool in tools if tool.name == tool_name),
+        None,
+    )
+    if replacement is None:
+        from app.schemas import ToolConfig
+
+        updated_tools = [*tools, ToolConfig(name=tool_name, description=proposed_description)]
+    else:
+        updated_tools = [replacement if tool.name == tool_name else tool for tool in tools]
+    return current_config.model_copy(
+        deep=True,
+        update={"version": new_version, "tools": updated_tools},
+    )
+
+
+def _current_tool_description(current_config: AgentConfig, tool_name: str) -> str | None:
+    return next(
+        (tool.description for tool in current_config.tools if tool.name == tool_name),
+        None,
     )

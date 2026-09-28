@@ -2,11 +2,14 @@
 
 from collections import defaultdict
 
-from app.schemas import EvaluationResult, ExecutionTrace, FailurePattern
+from app.schemas import AgentConfig, EvaluationResult, ExecutionTrace, FailurePattern
+from .instruction_constraints import find_instruction_violation
+from .tool_arguments import find_tool_contract, validate_tool_arguments
 
 
 _CATEGORY_ORDER = (
     "workflow_step_limit",
+    "tool_argument_schema_failure",
     "execution_error",
     "tool_usage_failure",
     "rule_failure",
@@ -19,6 +22,9 @@ _SUMMARIES = {
         "Multi-step workflows are blocked by the configured workflow step limit."
     ),
     "execution_error": "Target executions failed with an unexpected error.",
+    "tool_argument_schema_failure": (
+        "A selected tool failed because the model supplied an invalid argument schema."
+    ),
     "tool_usage_failure": (
         "Executions completed but required tool usage or tool order was incorrect."
     ),
@@ -29,6 +35,7 @@ _SUMMARIES = {
 def analyze_failures(
     evaluations: list[EvaluationResult],
     traces: list[ExecutionTrace],
+    agent_config: AgentConfig | None = None,
 ) -> list[FailurePattern]:
     """Return deterministic patterns for failed evaluation/trace pairs."""
 
@@ -48,7 +55,7 @@ def analyze_failures(
                 f"agent_version={evaluation.agent_version!r}"
             )
 
-        category = _primary_category(evaluation, trace)
+        category = _primary_category(evaluation, trace, agent_config)
         grouped_test_ids[category].append(evaluation.test_id)
 
     patterns: list[FailurePattern] = []
@@ -88,12 +95,21 @@ def _index_traces(
 
 
 def _primary_category(
-    evaluation: EvaluationResult, trace: ExecutionTrace
+    evaluation: EvaluationResult,
+    trace: ExecutionTrace,
+    agent_config: AgentConfig | None,
 ) -> str:
     if trace.error is not None:
         if _is_workflow_step_limit(trace.error):
             return "workflow_step_limit"
+        if agent_config is not None and _is_tool_argument_schema_failure(
+            trace, agent_config
+        ):
+            return "tool_argument_schema_failure"
         return "execution_error"
+
+    if agent_config is not None and find_instruction_violation(trace, agent_config):
+        return "tool_usage_failure"
 
     failed_metrics = {
         metric for metric, score in evaluation.rule_scores.items() if score < 1.0
@@ -108,6 +124,19 @@ def _is_workflow_step_limit(error: str) -> bool:
     return "max_steps" in normalized and (
         "workflow" in normalized or "step" in normalized
     )
+
+
+def _is_tool_argument_schema_failure(
+    trace: ExecutionTrace, agent_config: AgentConfig
+) -> bool:
+    if not trace.tool_calls or not trace.tool_call_arguments:
+        return False
+    tool_name = trace.tool_calls[-1]
+    observed_arguments = trace.tool_call_arguments[-1]
+    contract = find_tool_contract(agent_config.tools, tool_name)
+    if contract is None:
+        return False
+    return not validate_tool_arguments(contract, observed_arguments).valid
 
 
 def _severity(category: str, count: int) -> str:

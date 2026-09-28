@@ -6,6 +6,12 @@ from app.schemas import (
     FailurePattern,
     RootCauseAnalysis,
 )
+from .tool_arguments import (
+    argument_contract_parts,
+    find_tool_contract,
+    validate_tool_arguments,
+)
+from .instruction_constraints import find_instruction_violation
 
 
 def analyze_root_cause(
@@ -15,7 +21,11 @@ def analyze_root_cause(
 ) -> RootCauseAnalysis:
     """Diagnose one supported pattern without proposing a configuration change."""
 
-    if failure_pattern.category not in {"workflow_step_limit", "tool_usage_failure"}:
+    if failure_pattern.category not in {
+        "workflow_step_limit",
+        "tool_usage_failure",
+        "tool_argument_schema_failure",
+    }:
         raise ValueError(
             "Unsupported failure category for deterministic root-cause analysis: "
             f"{failure_pattern.category!r}"
@@ -26,6 +36,10 @@ def analyze_root_cause(
     )
     if failure_pattern.category == "tool_usage_failure":
         return _analyze_tool_usage_failure(
+            failure_pattern, relevant_traces, agent_config
+        )
+    if failure_pattern.category == "tool_argument_schema_failure":
+        return _analyze_tool_argument_schema_failure(
             failure_pattern, relevant_traces, agent_config
         )
 
@@ -77,6 +91,42 @@ def _analyze_tool_usage_failure(
             "Tool-usage root cause lacks observed tool-call evidence"
         )
 
+    violations = [
+        find_instruction_violation(trace, agent_config) for trace in relevant_traces
+    ]
+    if all(violation is not None for violation in violations):
+        constraint, observed_behavior_key = violations[0]
+        observed_behavior = constraint.forbidden_behavior
+        evidence = [
+            f"constraint id: {constraint.id}",
+                f"condition: {constraint.condition}",
+                f"observed behavior: {observed_behavior}",
+                f"observed behavior key: {observed_behavior_key}",
+            f"required behavior: {constraint.required_behavior}",
+            f"forbidden behavior: {constraint.forbidden_behavior}",
+        ]
+        return RootCauseAnalysis(
+            failure_category=failure_pattern.category,
+            evidence=evidence,
+            root_cause=(
+                "The observed behavior violates a registered instruction "
+                "constraint, and the current system prompt does not encode that "
+                "constraint clearly enough."
+            ),
+            target_component="system_prompt",
+            confidence=0.99,
+            metadata={
+                "constraint_id": constraint.id,
+                "condition": constraint.condition,
+                "required_behavior": constraint.required_behavior,
+                "forbidden_behavior": constraint.forbidden_behavior,
+                "observed_behavior": observed_behavior,
+                "observed_behavior_key": observed_behavior_key,
+                "instruction_lead": constraint.instruction_lead,
+                "rationale": constraint.rationale,
+            },
+        )
+
     evidence = [
         (
             f"{trace.test_id} completed with observed tool calls: "
@@ -96,12 +146,70 @@ def _analyze_tool_usage_failure(
         evidence=evidence,
         root_cause=(
             "The observed router completed execution with the wrong tool, while "
-            "the current system prompt gives only generic routing guidance and "
-            "does not instruct the router to honor explicit exclusions or "
-            "negated intent when product and promotion language coexist."
+            "the current system prompt does not provide sufficient guidance for "
+            "the required tool-selection behavior."
         ),
         target_component="system_prompt",
         confidence=0.9,
+    )
+
+
+def _analyze_tool_argument_schema_failure(
+    failure_pattern: FailurePattern,
+    relevant_traces: list[ExecutionTrace],
+    agent_config: AgentConfig,
+) -> RootCauseAnalysis:
+    observations: list[dict[str, object]] = []
+    evidence: list[str] = []
+    for trace in relevant_traces:
+        if not trace.tool_calls or not trace.tool_call_arguments:
+            raise ValueError(
+                "Tool-argument root cause requires observed tool-call arguments"
+            )
+        tool_name = trace.tool_calls[-1]
+        contract = find_tool_contract(agent_config.tools, tool_name)
+        if contract is None:
+            raise ValueError(
+                f"No registered tool contract for selected tool {tool_name!r}"
+            )
+        observed = trace.tool_call_arguments[-1]
+        validation = validate_tool_arguments(contract, observed)
+        if validation.valid:
+            raise ValueError(
+                "Tool-argument failure lacks a contract violation in trace evidence"
+            )
+        properties, required = argument_contract_parts(contract)
+        observed_keys = sorted(observed)
+        required_keys = sorted(required)
+        evidence.extend(
+            [
+                f"selected tool: {tool_name}",
+                f"observed argument keys: {observed_keys}",
+                f"required argument keys: {required_keys}",
+                f"missing required arguments: {validation.missing_required_arguments}",
+                f"unexpected arguments: {validation.unexpected_arguments}",
+            ]
+        )
+        observations.append(
+            {
+                "tool_name": tool_name,
+                "observed_arguments": dict(observed),
+                "argument_schema": {"properties": properties, "required": required},
+                "missing_required_arguments": validation.missing_required_arguments,
+                "unexpected_arguments": validation.unexpected_arguments,
+            }
+        )
+    first = observations[0]
+    return RootCauseAnalysis(
+        failure_category=failure_pattern.category,
+        evidence=evidence,
+        root_cause=(
+            "The selected tool's observed arguments do not satisfy its registered "
+            "argument contract."
+        ),
+        target_component="tool_description",
+        confidence=0.99,
+        metadata=first,
     )
 
 

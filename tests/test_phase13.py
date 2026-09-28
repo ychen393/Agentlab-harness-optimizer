@@ -16,6 +16,11 @@ from app.targets.commerce import (
     run_harness_sensitive_cycle,
     validate_harness_candidate,
 )
+from app.targets.commerce.patch_strategies import (
+    CommerceSystemPromptPatchStrategy,
+    CommerceToolDescriptionPatchStrategy,
+    commerce_patch_strategies,
+)
 
 
 class ControlledCommerceRouter:
@@ -91,6 +96,13 @@ def phase13_inputs():
     coverage = analyze_coverage(COMMERCE_SCENARIOS, adaptive)
     ex2 = next(item for item in coverage.generated_challenges if item.id == "EX2")
     return first_cycle.candidate_config, adaptive, coverage.generated_challenges, ex2
+
+
+def test_commerce_patch_strategies_are_registered_under_target_adapter() -> None:
+    strategies = commerce_patch_strategies()
+
+    assert isinstance(strategies[0], CommerceSystemPromptPatchStrategy)
+    assert isinstance(strategies[1], CommerceToolDescriptionPatchStrategy)
 
 
 def test_deterministic_ex2_is_explicitly_not_patchable() -> None:

@@ -1,6 +1,6 @@
 """Failure-analysis contracts shared by debugger and optimizer modules."""
 
-from typing import Annotated, Literal
+from typing import Any, Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -31,3 +31,4 @@ class RootCauseAnalysis(BaseModel):
         "workflow_config",
     ]
     confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+    metadata: dict[str, Any] = Field(default_factory=dict)

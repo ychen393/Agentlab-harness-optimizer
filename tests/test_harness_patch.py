@@ -41,8 +41,9 @@ def test_real_f1_proposes_bounded_workflow_patch() -> None:
     assert patch.old_value == {"max_steps": 2}
     assert patch.proposed_value == {"max_steps": 3}
     assert patch.supporting_failure_pattern_ids == ["F1"]
-    assert "search_policy" in patch.expected_effect
-    assert "check_eligibility" in patch.expected_effect
+    assert "required workflow step" in patch.expected_effect
+    assert "search_policy" not in patch.expected_effect
+    assert "check_eligibility" not in patch.expected_effect
     assert "Expected" in patch.expected_effect
     assert patch.regression_risk
 
