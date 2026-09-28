@@ -4,10 +4,10 @@ export const DEFAULT_REQUEST =
   "My order was paid on 2026-02-10 for 650 RMB. Which promotion applies, and do I qualify for the gift?";
 
 export function parseRequest(input: string, language: Language): RequestAnalysis {
-  const amount = input.match(/(?:for|amount|spend|paid)\s*(?:is|of|:)?\s*(\d+)\s*(RMB|元)?/i);
+  const amount = input.match(/(?:for|amount|spend|paid|金额)\s*(?:is|of|为|:)?\s*(\d+)\s*(RMB|元)?/i);
   const date = input.match(/\b\d{4}-\d{2}-\d{2}\b/);
   const lower = input.toLowerCase();
-  const intent = /promotion|promotion|gift|qualify|eligib/.test(lower)
+  const intent = /promotion|促销|gift|赠品|qualify|eligib|符合.*资格|资格/.test(lower)
     ? language === "zh" ? "促销资格查询" : "Promotion eligibility"
     : /product|商品|catalog|price/.test(lower)
       ? language === "zh" ? "商品信息查询" : "Product information"

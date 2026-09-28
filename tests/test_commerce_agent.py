@@ -176,6 +176,26 @@ def test_policy_discovery_executes_multi_step_workflow() -> None:
     }
 
 
+def test_chinese_promotion_request_is_understood_by_deterministic_router() -> None:
+    case = BenchmarkTestCase(
+        id="ZH_PROMO",
+        input="我的订单于 2026-02-10 支付，金额为 650 元。请问适用哪个促销活动？我是否符合赠品领取条件？",
+        category="normal",
+        difficulty="medium",
+        requirement_ids=["R_PROMO"],
+    )
+
+    trace = CommerceAgent().run(case, agent_config(max_steps=3))
+
+    assert trace.error is None
+    assert trace.tool_calls == ["search_policy", "check_eligibility"]
+    assert trace.tool_call_arguments[-1] == {
+        "policy_id": "POLICY_B",
+        "purchase_date": "2026-02-10",
+        "purchase_amount": 650,
+    }
+
+
 def test_max_steps_constrains_policy_discovery_workflow() -> None:
     scenario = COMMERCE_SCENARIOS[5]
 

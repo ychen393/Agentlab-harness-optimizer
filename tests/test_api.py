@@ -1,6 +1,6 @@
 from pydantic import ValidationError
 
-from api.main import DiagnoseRequest, RunRequest, diagnose, run
+from api.main import DiagnoseRequest, RunRequest, benchmarks, diagnose, run
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 
 
@@ -54,3 +54,13 @@ def test_registered_successful_run_returns_evaluation_without_failure_diagnosis(
     assert diagnosis["evaluation"]["passed"] is True
     assert diagnosis["failure_pattern"] is None
     assert diagnosis["root_cause"] is None
+
+
+def test_benchmarks_expose_real_scenario_and_test_case_data() -> None:
+    payload = benchmarks()
+    ct6 = next(item for item in payload["fixed_regression"] if item["test_case"]["id"] == "CT6")
+    assert ct6["scenario_id"] == "CS6"
+    assert "Which promotion applies" in ct6["test_case"]["input"]
+    assert ct6["ground_truth"]["expected_tool_calls"] == ["search_policy", "check_eligibility"]
+    assert {item["test_case"]["id"] for item in payload["adaptive_challenges"]} == {"AT1", "AT2", "AT3", "AT4", "AT5"}
+    assert {item["test_case"]["id"] for item in payload["coverage_exploration"]} == {"EXT1", "EXT2", "EXT3", "EXT4"}

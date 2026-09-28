@@ -273,7 +273,7 @@ def format_cli_report(evidence: DemoEvidence) -> str:
                 f"{evidence.final_decision.explanation}"
             ),
             "",
-            "Optional external-model evidence: not run by this deterministic CLI. Use real_model_smoke.py with explicit environment configuration.",
+            "Optional external-model evidence: not run by this deterministic CLI. Use scripts/real_model_smoke.py with explicit environment configuration.",
         ]
     )
     return "\n".join(lines)

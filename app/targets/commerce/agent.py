@@ -201,7 +201,7 @@ def _deterministic_route(user_input: str) -> tuple[str, dict[str, Any]]:
         if not policy_match and date_match:
             return "search_policy", {"active_on": date_match.group(0)}
         return "check_eligibility", _eligibility_arguments(user_input)
-    if "policy" in lowered or "promotion" in lowered:
+    if "policy" in lowered or "promotion" in lowered or "政策" in user_input or "促销" in user_input:
         policy_match = re.search(r"policy_[a-z]", user_input, re.IGNORECASE)
         date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_input)
         return "search_policy", {
@@ -213,7 +213,9 @@ def _deterministic_route(user_input: str) -> tuple[str, dict[str, Any]]:
 
 def _is_eligibility_request(user_input: str) -> bool:
     lowered = user_input.casefold()
-    return any(term in lowered for term in ("eligible", "eligibility", "qualify", "gift"))
+    return any(term in lowered for term in ("eligible", "eligibility", "qualify", "gift")) or any(
+        term in user_input for term in ("符合资格", "资格", "赠品", "礼品")
+    )
 
 
 def _eligibility_arguments(
@@ -223,7 +225,7 @@ def _eligibility_arguments(
     policy_match = re.search(r"policy_[a-z]", user_input, re.IGNORECASE)
     date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_input)
     amount_match = re.search(
-        r"(?:amount|spend|paid|for)\s*(?:is|of|:)?\s*(\d+)", lowered
+        r"(?:amount|spend|paid|for)\s*(?:is|of|:)?\s*(\d+)|金额\s*(?:为|是|:)?\s*(\d+)", lowered
     )
     arguments: dict[str, Any] = {}
     resolved_policy_id = policy_id or (
@@ -234,7 +236,7 @@ def _eligibility_arguments(
     if date_match:
         arguments["purchase_date"] = date_match.group(0)
     if amount_match:
-        arguments["purchase_amount"] = int(amount_match.group(1))
+        arguments["purchase_amount"] = int(amount_match.group(1) or amount_match.group(2))
     return arguments
 
 

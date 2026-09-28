@@ -1,6 +1,11 @@
 """Optional external validation of the Commerce tool-schema description patch."""
 
 import json
+from pathlib import Path
+import sys
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.debugger import analyze_failures
 from app.llm import OpenAICompatibleChat
@@ -13,7 +18,7 @@ from app.targets.commerce import (
     propose_commerce_tool_description_patch,
 )
 from app.demo_evidence import build_demo_evidence
-from real_model_smoke import CapturingLLM
+from scripts.real_model_smoke import CapturingLLM
 
 
 def main() -> int:

@@ -85,7 +85,7 @@ prompt change can causally change routing in the controlled experiment.
 
 ### C. Optional external-model evidence
 
-`real_model_smoke.py` can repeat EX2 against one OpenAI-compatible provider and
+`scripts/real_model_smoke.py` can repeat EX2 against one OpenAI-compatible provider and
 report V2/V3 success counts. This is supplementary, is never used by normal
 tests, and has **not been run in the verified project environment because no
 credentials were configured**.
@@ -104,9 +104,8 @@ credentials were configured**.
 | `app/llm/` | Optional provider adapter outside the deterministic core path. |
 | `app/targets/commerce/` | Commerce Agent, tools, policies, scenarios, evaluator, and challenge experiments. |
 | `tests/` | Unit and integration coverage; no live model calls. |
-| `demo.py` | Reproduces the complete local CLI evidence story. |
-| `streamlit_app.py` | Thin in-memory evidence viewer over the same orchestration APIs. |
-| `real_model_smoke.py` | Optional repeated external-model EX2 comparison. |
+| `scripts/demo.py` | Reproduces the complete local CLI evidence story. |
+| `scripts/real_model_smoke.py` | Optional repeated external-model EX2 comparison. |
 
 ## Quickstart on Windows PowerShell
 
@@ -117,13 +116,13 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m pytest
-python demo.py
+python scripts/demo.py
 ```
 
 Open the Streamlit demo:
 
 ```powershell
-python -m streamlit run streamlit_app.py
+python -m streamlit run agentlab_ui.py
 ```
 
 Normal tests and the deterministic CLI demo require no API key and make no live
@@ -139,7 +138,7 @@ $env:AGENTLAB_LLM_API_KEY = "your-api-key"
 $env:AGENTLAB_LLM_BASE_URL = "https://your-provider.example/v1"
 $env:AGENTLAB_LLM_MODEL = "your-model-name"
 $env:AGENTLAB_LLM_TIMEOUT_SECONDS = "30"
-python real_model_smoke.py --repetitions 5
+python scripts/real_model_smoke.py --repetitions 5
 ```
 
 `.env.example` documents the supported names, but the project intentionally

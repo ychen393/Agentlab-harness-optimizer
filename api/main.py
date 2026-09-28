@@ -15,6 +15,7 @@ from app.targets.commerce.evaluator import evaluate_commerce
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 from app.debugger.failure_classifier import analyze_failures
 from app.debugger.root_cause import analyze_root_cause
+from app.demo_evidence import build_demo_evidence
 
 
 class RunRequest(BaseModel):
@@ -38,6 +39,36 @@ app.add_middleware(
 
 _SCENARIOS = {scenario.id: scenario for scenario in COMMERCE_SCENARIOS}
 _RUNS: dict[str, dict[str, object]] = {}
+
+
+def _serialize_benchmark_scenario(scenario: object, family: str) -> dict[str, object]:
+    return {
+        "family": family,
+        "scenario_id": scenario.id,
+        "test_case": scenario.test_case.model_dump(mode="json"),
+        "ground_truth": scenario.ground_truth.model_dump(mode="json"),
+    }
+
+
+@app.get("/api/benchmarks")
+def benchmarks() -> dict[str, object]:
+    """Expose the registered Commerce benchmark evidence for inspection."""
+
+    evidence = build_demo_evidence()
+    return {
+        "fixed_regression": [
+            _serialize_benchmark_scenario(scenario, "fixed_regression")
+            for scenario in COMMERCE_SCENARIOS
+        ],
+        "adaptive_challenges": [
+            _serialize_benchmark_scenario(scenario, "adaptive_challenges")
+            for scenario in evidence.adaptive_challenges
+        ],
+        "coverage_exploration": [
+            _serialize_benchmark_scenario(scenario, "coverage_exploration")
+            for scenario in evidence.coverage_report.generated_challenges
+        ],
+    }
 
 
 def _evaluation_unavailable() -> dict[str, object]:

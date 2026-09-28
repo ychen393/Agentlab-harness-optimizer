@@ -3,7 +3,7 @@
 from collections import Counter
 
 from app.schemas import EvaluationResult, ExecutionTrace
-from real_model_smoke import CapturingLLM, _diagnostic_record, _update_observations
+from scripts.real_model_smoke import CapturingLLM, _diagnostic_record, _update_observations
 
 
 def test_capturing_llm_preserves_exact_raw_response() -> None:
