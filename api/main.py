@@ -16,6 +16,7 @@ from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 from app.debugger.failure_classifier import analyze_failures
 from app.debugger.root_cause import analyze_root_cause
 from app.demo_evidence import build_demo_evidence
+from app.optimizer import propose_harness_patch
 
 
 class RunRequest(BaseModel):
@@ -26,6 +27,10 @@ class RunRequest(BaseModel):
 
 
 class DiagnoseRequest(BaseModel):
+    run_id: str = Field(min_length=1)
+
+
+class PatchRequest(BaseModel):
     run_id: str = Field(min_length=1)
 
 
@@ -135,10 +140,79 @@ def diagnose(request: DiagnoseRequest) -> dict[str, object]:
 
     patterns = analyze_failures([evaluation], [trace], config)
     root_cause = analyze_root_cause(patterns[0], [trace], config) if patterns else None
+    record["evaluation"] = evaluation
+    record["failure_pattern"] = patterns[0] if patterns else None
+    record["root_cause"] = root_cause
     return {
         "status": "diagnosed",
         "evaluation_available": True,
         "evaluation": evaluation.model_dump(mode="json"),
         "failure_pattern": patterns[0].model_dump(mode="json") if patterns else None,
         "root_cause": root_cause.model_dump(mode="json") if root_cause else None,
+    }
+
+
+@app.post("/api/patch")
+def patch(request: PatchRequest) -> dict[str, object]:
+    """Propose one bounded harness patch from server-side diagnosis evidence."""
+
+    record = _RUNS.get(request.run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="unknown run_id")
+    scenario = record["scenario"]
+    if scenario is None:
+        return {
+            "status": "patch_unavailable",
+            "message": "No registered evaluation context is available for this run.",
+            "patch": None,
+            "failure_pattern": None,
+            "root_cause": None,
+        }
+
+    trace = record["trace"]
+    config = record["config"]
+    evaluation = evaluate_commerce(scenario, trace)
+    if evaluation.passed:
+        return {
+            "status": "patch_unavailable",
+            "message": "The registered evaluation passed; no patch is needed.",
+            "patch": None,
+            "failure_pattern": None,
+            "root_cause": None,
+        }
+    pattern = record.get("failure_pattern")
+    root_cause = record.get("root_cause")
+    if pattern is None:
+        patterns = analyze_failures([evaluation], [trace], config)
+        pattern = patterns[0] if patterns else None
+    if pattern is None:
+        return {
+            "status": "patch_unavailable",
+            "message": "No supported failure pattern was identified.",
+            "patch": None,
+            "failure_pattern": None,
+            "root_cause": None,
+        }
+    if root_cause is None:
+        root_cause = analyze_root_cause(pattern, [trace], config)
+    record["evaluation"] = evaluation
+    record["failure_pattern"] = pattern
+    record["root_cause"] = root_cause
+    try:
+        proposed = propose_harness_patch(pattern, root_cause, config)
+    except (ValueError, TypeError) as exc:
+        return {
+            "status": "patch_unavailable",
+            "message": str(exc),
+            "patch": None,
+            "failure_pattern": pattern.model_dump(mode="json"),
+            "root_cause": root_cause.model_dump(mode="json"),
+        }
+    return {
+        "status": "patch_ready",
+        "message": "A bounded harness patch is ready for later regression validation.",
+        "patch": proposed.model_dump(mode="json"),
+        "failure_pattern": pattern.model_dump(mode="json"),
+        "root_cause": root_cause.model_dump(mode="json"),
+        "evaluation": evaluation.model_dump(mode="json"),
     }

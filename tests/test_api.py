@@ -1,6 +1,6 @@
 from pydantic import ValidationError
 
-from api.main import DiagnoseRequest, RunRequest, benchmarks, diagnose, run
+from api.main import DiagnoseRequest, PatchRequest, RunRequest, benchmarks, diagnose, patch, run
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 
 
@@ -79,3 +79,30 @@ def test_benchmarks_expose_real_scenario_and_test_case_data() -> None:
     assert ct6["ground_truth"]["expected_tool_calls"] == ["search_policy", "check_eligibility"]
     assert {item["test_case"]["id"] for item in payload["adaptive_challenges"]} == {"AT1", "AT2", "AT3", "AT4", "AT5"}
     assert {item["test_case"]["id"] for item in payload["coverage_exploration"]} == {"EXT1", "EXT2", "EXT3", "EXT4"}
+
+
+def test_patch_endpoint_returns_real_bounded_workflow_patch() -> None:
+    body = run(RunRequest(request="My order was paid on 2026-02-10 for 650 RMB. Which promotion applies, and do I qualify for the gift?", scenario_id="CS6"))
+    payload = patch(PatchRequest(run_id=body["run_id"]))
+    assert payload["status"] == "patch_ready"
+    assert payload["patch"]["target_component"] == "workflow_config"
+    assert payload["patch"]["old_value"] == {"max_steps": 2}
+    assert payload["patch"]["proposed_value"] == {"max_steps": 3}
+    assert payload["patch"]["supporting_failure_pattern_ids"]
+    assert payload["failure_pattern"]["category"] == "workflow_step_limit"
+    assert payload["root_cause"]["target_component"] == "workflow_config"
+
+
+def test_patch_endpoint_reports_unavailable_without_registered_context() -> None:
+    body = run(RunRequest(request="Find running shoes"))
+    payload = patch(PatchRequest(run_id=body["run_id"]))
+    assert payload["status"] == "patch_unavailable"
+    assert payload["patch"] is None
+
+
+def test_patch_endpoint_reports_unavailable_when_strategy_cannot_propose(monkeypatch) -> None:
+    body = run(RunRequest(request="My order was paid on 2026-02-10 for 650 RMB. Which promotion applies, and do I qualify for the gift?", scenario_id="CS6"))
+    monkeypatch.setattr("api.main.propose_harness_patch", lambda *_args: (_ for _ in ()).throw(ValueError("unsupported patch")))
+    payload = patch(PatchRequest(run_id=body["run_id"]))
+    assert payload["status"] == "patch_unavailable"
+    assert payload["message"] == "unsupported patch"

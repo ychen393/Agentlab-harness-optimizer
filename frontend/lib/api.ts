@@ -19,6 +19,15 @@ export interface DiagnosisResponse {
   root_cause: RootCauseAnalysis | null;
 }
 
+export interface PatchResponse {
+  status: "patch_ready" | "patch_unavailable";
+  message?: string;
+  patch: import("../types/contracts").HarnessPatch | null;
+  failure_pattern: FailurePattern | null;
+  root_cause: RootCauseAnalysis | null;
+  evaluation?: EvaluationResult | null;
+}
+
 export interface BenchmarkCase {
   family: "fixed_regression" | "adaptive_challenges" | "coverage_exploration";
   scenario_id: string;
@@ -70,6 +79,19 @@ export async function diagnoseRun(runId: string): Promise<DiagnosisResponse> {
     throw new Error(`AgentLab diagnosis API ${response.status}: ${detail}`);
   }
   return response.json() as Promise<DiagnosisResponse>;
+}
+
+export async function generatePatch(runId: string): Promise<PatchResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/patch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`AgentLab patch API ${response.status}: ${detail}`);
+  }
+  return response.json() as Promise<PatchResponse>;
 }
 
 export async function fetchBenchmarks(): Promise<BenchmarkResponse> {
