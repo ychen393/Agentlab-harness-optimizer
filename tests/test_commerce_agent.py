@@ -64,6 +64,12 @@ def test_product_search_tool_executes() -> None:
     assert [product.id for product in products] == ["P1"]
 
 
+def test_product_search_accepts_localized_aliases() -> None:
+    assert [item.name for item in search_products("请查找跑鞋，并展示可购买的商品。")] == ["Running Shoes"]
+    assert [item.name for item in search_products("有没有旅行背包？")] == ["Travel Backpack"]
+    assert [item.name for item in search_products("Find Running Shoes.")] == ["Running Shoes"]
+
+
 def test_policy_lookup_tool_executes() -> None:
     policies = search_policy(policy_id="POLICY_A")
 

@@ -1,6 +1,6 @@
 from pydantic import ValidationError
 
-from api.main import DiagnoseRequest, PatchRequest, RunRequest, benchmarks, diagnose, patch, run
+from api.main import DiagnoseRequest, PatchRequest, RegressionRequest, RunRequest, benchmarks, diagnose, failures, patch, patches, regression, regressions, run, runs
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 
 
@@ -106,3 +106,41 @@ def test_patch_endpoint_reports_unavailable_when_strategy_cannot_propose(monkeyp
     payload = patch(PatchRequest(run_id=body["run_id"]))
     assert payload["status"] == "patch_unavailable"
     assert payload["message"] == "unsupported patch"
+
+
+def test_regression_endpoint_applies_patch_and_compares_frozen_ct_suite() -> None:
+    body = run(RunRequest(request="My order was paid on 2026-02-10 for 650 RMB. Which promotion applies, and do I qualify for the gift?", scenario_id="CS6"))
+    patch_payload = patch(PatchRequest(run_id=body["run_id"]))
+    result = regression(RegressionRequest(run_id=body["run_id"]))
+    assert patch_payload["status"] == "patch_ready"
+    assert result["candidate_config"]["workflow"]["max_steps"] == 3
+    assert result["baseline_config"]["workflow"]["max_steps"] == 2
+    decision = result["regression_decision"]
+    assert [item["test_id"] for item in result["baseline_evaluations"]] == [f"CT{i}" for i in range(1, 8)]
+    assert [item["test_id"] for item in result["candidate_evaluations"]] == [f"CT{i}" for i in range(1, 8)]
+    assert decision["decision"] == "accept"
+    assert decision["improved_test_ids"] == ["CT6", "CT7"]
+    assert decision["regressed_test_ids"] == []
+    assert decision["baseline_pass_count"] == 5
+    assert decision["candidate_pass_count"] == 7
+
+
+def test_regression_endpoint_requires_generated_patch() -> None:
+    body = run(RunRequest(request="Find running shoes"))
+    try:
+        regression(RegressionRequest(run_id=body["run_id"]))
+    except Exception as error:
+        assert getattr(error, "status_code", None) == 409
+    else:
+        raise AssertionError("regression must require a server-side generated patch")
+
+
+def test_session_history_endpoints_expose_real_accumulated_artifacts() -> None:
+    body = run(RunRequest(request="My order was paid on 2026-02-10 for 650 RMB. Which promotion applies, and do I qualify for the gift?", scenario_id="CS6"))
+    diagnose(DiagnoseRequest(run_id=body["run_id"]))
+    patch(PatchRequest(run_id=body["run_id"]))
+    regression(RegressionRequest(run_id=body["run_id"]))
+    assert any(item["run_id"] == body["run_id"] for item in runs()["runs"])
+    assert any(item["run_id"] == body["run_id"] for item in failures()["failures"])
+    assert any(item["run_id"] == body["run_id"] for item in patches()["patches"])
+    assert any(item["run_id"] == body["run_id"] for item in regressions()["regressions"])

@@ -23,10 +23,30 @@ DEFAULT_TOOL_DESCRIPTIONS = {
 
 
 def search_products(query: str) -> list[Product]:
-    normalized_query = query.strip().casefold()
+    normalized_query = _normalize_product_query(query)
     if not normalized_query:
         raise ValueError("product query is required")
     return [product for product in PRODUCTS if normalized_query in product.name.casefold()]
+
+
+_PRODUCT_ALIASES = {
+    "跑鞋": "running shoes",
+    "运动鞋": "running shoes",
+    "旅行背包": "travel backpack",
+    "背包": "travel backpack",
+    "咖啡机": "coffee maker",
+}
+
+
+def _normalize_product_query(query: str) -> str:
+    normalized = query.strip().casefold()
+    for alias, canonical in _PRODUCT_ALIASES.items():
+        if alias in normalized:
+            return canonical
+    for product in PRODUCTS:
+        if product.name.casefold() in normalized:
+            return product.name.casefold()
+    return normalized
 
 
 def search_policy(

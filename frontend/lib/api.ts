@@ -28,6 +28,27 @@ export interface PatchResponse {
   evaluation?: EvaluationResult | null;
 }
 
+export interface RegressionResponse {
+  status: "completed";
+  patch: import("../types/contracts").HarnessPatch;
+  baseline_config: Record<string, unknown>;
+  candidate_config: Record<string, unknown>;
+  baseline_traces: ExecutionTrace[];
+  baseline_evaluations: EvaluationResult[];
+  candidate_traces: ExecutionTrace[];
+  candidate_evaluations: EvaluationResult[];
+  regression_decision: import("../types/contracts").RegressionDecision;
+}
+
+export interface SessionRun {
+  run_id: string; created_at: string; request: string; scenario_id: string | null;
+  test_id: string; agent_version: string; execution_status: string; evaluation_status: string;
+  trace: ExecutionTrace; evaluation: EvaluationResult | null;
+  failure_pattern: FailurePattern | null; root_cause: RootCauseAnalysis | null;
+  patch: import("../types/contracts").HarnessPatch | null;
+  regression: import("../types/contracts").RegressionDecision | null;
+}
+
 export interface BenchmarkCase {
   family: "fixed_regression" | "adaptive_challenges" | "coverage_exploration";
   scenario_id: string;
@@ -94,8 +115,32 @@ export async function generatePatch(runId: string): Promise<PatchResponse> {
   return response.json() as Promise<PatchResponse>;
 }
 
+export async function runRegression(runId: string): Promise<RegressionResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/regression`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`AgentLab regression API ${response.status}: ${detail}`);
+  }
+  return response.json() as Promise<RegressionResponse>;
+}
+
 export async function fetchBenchmarks(): Promise<BenchmarkResponse> {
   const response = await fetch(`${API_BASE_URL}/api/benchmarks`);
   if (!response.ok) throw new Error(`AgentLab benchmark API ${response.status}: ${await response.text()}`);
   return response.json() as Promise<BenchmarkResponse>;
 }
+
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  if (!response.ok) throw new Error(`AgentLab history API ${response.status}: ${await response.text()}`);
+  return response.json() as Promise<T>;
+}
+
+export const fetchRuns = () => getJson<{ session_label: string; runs: SessionRun[] }>("/api/runs");
+export const fetchFailures = () => getJson<{ session_label: string; failures: Array<{ run_id: string; failure_pattern: FailurePattern; root_cause: RootCauseAnalysis }> }>("/api/failures");
+export const fetchPatches = () => getJson<{ session_label: string; patches: Array<{ run_id: string; patch: import("../types/contracts").HarnessPatch }> }>("/api/patches");
+export const fetchRegressions = () => getJson<{ session_label: string; regressions: Array<{ run_id: string; regression: import("../types/contracts").RegressionDecision }> }>("/api/regressions");

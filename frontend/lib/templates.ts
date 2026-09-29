@@ -7,6 +7,7 @@ export interface ScenarioTemplate {
   requests: Record<Language, string>;
   scenarioId: string | null;
   testCaseId: string | null;
+  support: "registered" | "execution_only" | "disabled";
 }
 
 export const SCENARIO_TEMPLATES: Record<ScenarioTemplateId, ScenarioTemplate> = {
@@ -18,26 +19,30 @@ export const SCENARIO_TEMPLATES: Record<ScenarioTemplateId, ScenarioTemplate> = 
     },
     scenarioId: "CS6",
     testCaseId: "CT6",
+    support: "registered",
   },
   product: {
     id: "product",
     requests: { zh: "请查找跑鞋，并展示可购买的商品。", en: "Find running shoes and show the available products." },
     scenarioId: null,
     testCaseId: null,
+    support: "execution_only",
   },
   order: {
     id: "order",
     requests: { zh: "我的订单目前是什么状态？预计何时送达？", en: "What is the status of my order and when will it be delivered?" },
     scenarioId: null,
     testCaseId: null,
+    support: "disabled",
   },
   returns: {
     id: "returns",
     requests: { zh: "线上订单的退货政策是什么？", en: "What is the return policy for an online order?" },
     scenarioId: null,
     testCaseId: null,
+    support: "disabled",
   },
-  custom: { id: "custom", requests: { zh: "", en: "" }, scenarioId: null, testCaseId: null },
+  custom: { id: "custom", requests: { zh: "", en: "" }, scenarioId: null, testCaseId: null, support: "execution_only" },
 };
 
 export function requestForTemplate(id: ScenarioTemplateId, language: Language): string {
