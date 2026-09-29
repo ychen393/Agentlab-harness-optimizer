@@ -18,6 +18,8 @@ def test_run_returns_real_execution_trace() -> None:
     assert body["tool_events"][0]["tool_name"] == "search_policy"
     assert body["tool_events"][0]["result"][0]["id"] == "POLICY_B"
     assert body["error"] is not None
+    assert body["evaluation_available"] is True
+    assert body["evaluation"]["passed"] is False
     assert body["latency_seconds"] >= 0
 
     diagnosis = diagnose(DiagnoseRequest(run_id=body["run_id"]))
@@ -43,6 +45,19 @@ def test_custom_run_is_runnable_but_not_evaluable() -> None:
     diagnosis = diagnose(DiagnoseRequest(run_id=body["run_id"]))
     assert diagnosis["status"] == "evaluation_unavailable"
     assert "no registered evaluation reference" in diagnosis["message"]
+
+
+def test_chinese_promotion_request_uses_registered_workflow_path() -> None:
+    body = run(
+        RunRequest(
+            request="我的订单于 2026-02-10 支付，金额为 650 元。请问适用哪个促销活动？我是否符合赠品领取条件？",
+            scenario_id="CS6",
+        )
+    )
+
+    assert body["tool_calls"] == ["search_policy"]
+    assert body["tool_call_arguments"] == [{"active_on": "2026-02-10"}]
+    assert body["evaluation"]["passed"] is False
 
 
 def test_registered_successful_run_returns_evaluation_without_failure_diagnosis() -> None:

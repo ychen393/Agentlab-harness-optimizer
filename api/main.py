@@ -99,12 +99,14 @@ def run(request: RunRequest) -> dict[str, object]:
     trace = run_agent(test_case, config, CommerceAgent())
     run_id = f"RUN-{uuid4().hex[:12]}"
     scenario = _SCENARIOS.get(request.scenario_id) if request.scenario_id else None
+    evaluation = evaluate_commerce(scenario, trace) if scenario is not None else None
     _RUNS[run_id] = {"trace": trace, "config": config, "scenario": scenario}
     return {
         **trace.model_dump(mode="json"),
         "run_id": run_id,
         "evaluation_available": scenario is not None,
         "evaluation_context": scenario.id if scenario is not None else None,
+        "evaluation": evaluation.model_dump(mode="json") if evaluation is not None else None,
     }
 
 

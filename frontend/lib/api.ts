@@ -7,6 +7,7 @@ export interface RunResponse extends ExecutionTrace {
   run_id: string;
   evaluation_available: boolean;
   evaluation_context: string | null;
+  evaluation: EvaluationResult | null;
 }
 
 export interface DiagnosisResponse {

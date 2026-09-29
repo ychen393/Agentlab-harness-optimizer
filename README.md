@@ -119,11 +119,20 @@ python -m pytest
 python scripts/demo.py
 ```
 
-Open the Streamlit demo:
+Run the current FastAPI + Next.js product UI:
 
 ```powershell
-python -m streamlit run agentlab_ui.py
+# Backend (from the repository root)
+python -m uvicorn api.main:app --reload --port 8001
+
+# Frontend (from frontend/)
+cd frontend
+npm run dev -- --port 3000
 ```
+
+Open `http://localhost:3000`. If runtime behavior does not match the source
+code, verify the processes serving ports 8001 and 3000 before changing
+application logic.
 
 Normal tests and the deterministic CLI demo require no API key and make no live
 LLM calls.

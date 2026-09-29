@@ -1,4 +1,6 @@
-export type WorkflowState = "ready" | "execution_failed" | "diagnosed" | "patch_ready" | "validated";
+// `execution` means the trace completed; `execution_failed` means the trace
+// contains an execution error. Both remain in the evaluation stage.
+export type WorkflowState = "ready" | "execution" | "execution_failed" | "diagnosed" | "patch_ready" | "validated";
 export type Language = "zh" | "en";
 
 export interface RequestAnalysis {
@@ -17,6 +19,9 @@ export interface ExecutionTrace {
   tool_events?: ToolCallEvent[];
   error: string | null;
   latency_seconds: number | null;
+  evaluation_available?: boolean;
+  evaluation_context?: string | null;
+  evaluation?: EvaluationResult | null;
 }
 
 export interface ToolCallEvent {
