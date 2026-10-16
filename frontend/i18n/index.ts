@@ -51,4 +51,8 @@ const TEXT = {
 } as const;
 
 export type TranslationKey = keyof typeof TEXT.zh;
-export function t(language: Language, key: TranslationKey): string { return TEXT[language][key]; }
+export function t(language: Language, key: TranslationKey): string {
+  if (key === "stepNotReached") return language === "zh" ? "未执行" : "NOT REACHED";
+  if (key === "stepPassed") return language === "zh" ? "已执行" : "PASS";
+  return TEXT[language][key];
+}
