@@ -1,7 +1,7 @@
 import type { ExecutionTrace } from "../types/contracts";
 import type { EvaluationResult, FailurePattern, RootCauseAnalysis } from "../types/contracts";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_AGENTLAB_API_URL ?? "http://localhost:8001";
+const API_BASE_URL = process.env.NEXT_PUBLIC_AGENTLAB_API_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8001");
 
 export interface RunResponse extends ExecutionTrace {
   run_id: string;
