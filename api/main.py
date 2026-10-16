@@ -1,5 +1,6 @@
 """Minimal HTTP adapter for real AgentLab Commerce execution."""
 
+import os
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import uuid4
@@ -42,13 +43,27 @@ class RegressionRequest(BaseModel):
     run_id: str = Field(min_length=1)
 
 
+def _cors_origins() -> list[str]:
+    raw = os.getenv(
+        "AGENTLAB_CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    )
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 app = FastAPI(title="AgentLab API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_methods=["POST", "OPTIONS"],
+    allow_origins=_cors_origins(),
+    allow_origin_regex=os.getenv("AGENTLAB_CORS_ORIGIN_REGEX") or None,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
 
 _SCENARIOS = {scenario.id: scenario for scenario in COMMERCE_SCENARIOS}
 _RUNS: dict[str, dict[str, object]] = {}
