@@ -41,7 +41,7 @@ TOOL_CONTRACT_CASES: tuple[CommerceScenario, ...] = (
         test_case=TestCase(
             id="TD1",
             input="Find Running Shoes.",
-            category="tool_contract_seed",
+            category="tool_required",
             difficulty="medium",
             requirement_ids=["R_PRODUCT_LOOKUP", "R_TOOL_ARGUMENT_CONTRACT"],
         ),
@@ -52,7 +52,7 @@ TOOL_CONTRACT_CASES: tuple[CommerceScenario, ...] = (
         test_case=TestCase(
             id="TD2",
             input="Do you have a Travel Backpack?",
-            category="tool_contract_heldout",
+            category="tool_required",
             difficulty="medium",
             requirement_ids=["R_PRODUCT_LOOKUP", "R_TOOL_ARGUMENT_CONTRACT"],
         ),
@@ -63,7 +63,7 @@ TOOL_CONTRACT_CASES: tuple[CommerceScenario, ...] = (
         test_case=TestCase(
             id="TD3",
             input="Show me the Coffee Maker.",
-            category="tool_contract_heldout",
+            category="tool_required",
             difficulty="medium",
             requirement_ids=["R_PRODUCT_LOOKUP", "R_TOOL_ARGUMENT_CONTRACT"],
         ),
@@ -74,7 +74,7 @@ TOOL_CONTRACT_CASES: tuple[CommerceScenario, ...] = (
         test_case=TestCase(
             id="TD4",
             input="帮我找一下跑鞋",
-            category="tool_contract_heldout",
+            category="tool_required",
             difficulty="hard",
             requirement_ids=["R_PRODUCT_LOOKUP", "R_TOOL_ARGUMENT_CONTRACT"],
         ),
@@ -85,7 +85,7 @@ TOOL_CONTRACT_CASES: tuple[CommerceScenario, ...] = (
         test_case=TestCase(
             id="TD5",
             input="Search for Running Shoes using the required query argument.",
-            category="tool_contract_control",
+            category="normal",
             difficulty="medium",
             requirement_ids=["R_PRODUCT_LOOKUP", "R_TOOL_ARGUMENT_CONTRACT"],
         ),
