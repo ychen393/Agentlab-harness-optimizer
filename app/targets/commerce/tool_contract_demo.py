@@ -174,7 +174,7 @@ def build_tool_contract_repair_proof(
 ) -> ToolContractRepairProof:
     """Derive one patch from TD1, then validate it on unseen and frozen cases."""
 
-    accepted_v2 = baseline_config or _accepted_workflow_candidate()
+    accepted_v2 = baseline_config or tool_contract_baseline_config()
 
     seed_router = ContractSensitiveRouter()
     seed_trace = run_agent(
@@ -250,7 +250,7 @@ def build_tool_contract_repair_proof(
     )
 
 
-def _accepted_workflow_candidate() -> AgentConfig:
+def tool_contract_baseline_config() -> AgentConfig:
     first_cycle = run_optimization_cycle(
         COMMERCE_SCENARIOS,
         commerce_v1_config(),
