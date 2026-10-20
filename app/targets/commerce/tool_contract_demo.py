@@ -107,8 +107,6 @@ class ContractSensitiveRouter:
     the rendered tool description exposes the registered query contract.
     """
 
-    explicit_contract_marker = 'Arguments: {"query":"<string>"}.'
-
     def __init__(self) -> None:
         self.prompts: list[str] = []
 
@@ -147,9 +145,9 @@ class ContractSensitiveRouter:
                 arguments["active_on"] = date_match.group(0)
             return _route("search_policy", arguments)
 
-        contract_is_explicit = self.explicit_contract_marker in prompt
+        documented_argument = _documented_argument_name(prompt, "search_products")
         explicit_control = "required query argument" in lowered
-        argument_key = "query" if contract_is_explicit or explicit_control else "product_name"
+        argument_key = documented_argument or ("query" if explicit_control else "product_name")
         return _route("search_products", {argument_key: user_input})
 
 
@@ -271,3 +269,24 @@ def _accepted_workflow_candidate() -> AgentConfig:
 
 def _route(tool: str, arguments: dict[str, object]) -> str:
     return json.dumps({"tool": tool, "arguments": arguments})
+
+
+
+def _documented_argument_name(prompt: str, tool_name: str) -> str | None:
+    """Read the first explicit argument key from one rendered tool description."""
+
+    tool_line = next(
+        (line for line in prompt.splitlines() if line.startswith(f"- {tool_name}:")),
+        None,
+    )
+    if tool_line is None or "Arguments:" not in tool_line:
+        return None
+    raw_schema = tool_line.split("Arguments:", 1)[1].strip().rstrip(".")
+    try:
+        example = json.loads(raw_schema)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(example, dict) or not example:
+        return None
+    first_key = next(iter(example))
+    return first_key if isinstance(first_key, str) and first_key else None
