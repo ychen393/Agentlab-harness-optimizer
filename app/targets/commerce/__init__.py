@@ -18,6 +18,15 @@ from .patch_strategies import (
     commerce_patch_strategies,
 )
 from .scenarios import COMMERCE_SCENARIOS
+from .tool_contract_demo import (
+    ContractSensitiveRouter,
+    TOOL_CONTRACT_CASES,
+    TOOL_CONTRACT_CONTROL,
+    TOOL_CONTRACT_HELDOUT,
+    TOOL_CONTRACT_SEED,
+    ToolContractRepairProof,
+    build_tool_contract_repair_proof,
+)
 
 __all__ = [
     "COMMERCE_SCENARIOS",
@@ -37,4 +46,11 @@ __all__ = [
     "run_challenges",
     "run_harness_sensitive_cycle",
     "validate_harness_candidate",
+    "ContractSensitiveRouter",
+    "TOOL_CONTRACT_CASES",
+    "TOOL_CONTRACT_CONTROL",
+    "TOOL_CONTRACT_HELDOUT",
+    "TOOL_CONTRACT_SEED",
+    "ToolContractRepairProof",
+    "build_tool_contract_repair_proof",
 ]
