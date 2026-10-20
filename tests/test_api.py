@@ -171,6 +171,8 @@ def test_tool_contract_case_uses_same_interactive_failure_repair_flow() -> None:
     assert diagnosis["root_cause"]["target_component"] == "tool_description"
     assert diagnosis["root_cause"]["metadata"]["missing_required_arguments"] == ["query"]
     assert diagnosis["root_cause"]["metadata"]["unexpected_arguments"] == ["product_name"]
+    assert diagnosis["root_cause"]["metadata"]["argument_contract_exposed_in_description"] is False
+    assert "not exposed in the model-facing tool description" in diagnosis["root_cause"]["root_cause"]
 
     patch_payload = patch(PatchRequest(run_id=body["run_id"]))
     assert patch_payload["status"] == "patch_ready"
@@ -185,6 +187,15 @@ def test_tool_contract_case_uses_same_interactive_failure_repair_flow() -> None:
     assert [item["test_id"] for item in result["baseline_evaluations"]] == [
         "CT1", "CT2", "CT3", "CT4", "CT5", "CT6", "CT7",
         "TD1", "TD2", "TD3", "TD4", "TD5",
+    ]
+    assert result["validation_groups"] == [
+        {"id": "patch_derivation", "case_ids": ["TD1"]},
+        {"id": "held_out_validation", "case_ids": ["TD2", "TD3", "TD4"]},
+        {"id": "negative_control", "case_ids": ["TD5"]},
+        {
+            "id": "frozen_existing_capability",
+            "case_ids": ["CT1", "CT2", "CT3", "CT4", "CT5", "CT6", "CT7"],
+        },
     ]
     assert decision["baseline_pass_count"] == 8
     assert decision["candidate_pass_count"] == 12
