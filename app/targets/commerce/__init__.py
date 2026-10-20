@@ -26,6 +26,7 @@ from .tool_contract_demo import (
     TOOL_CONTRACT_SEED,
     ToolContractRepairProof,
     build_tool_contract_repair_proof,
+    tool_contract_baseline_config,
 )
 
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     "TOOL_CONTRACT_SEED",
     "ToolContractRepairProof",
     "build_tool_contract_repair_proof",
+    "tool_contract_baseline_config",
 ]
