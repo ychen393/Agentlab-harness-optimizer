@@ -18,6 +18,8 @@ from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 from app.targets.commerce.tool_contract_demo import (
     ContractSensitiveRouter,
     TOOL_CONTRACT_CASES,
+    TOOL_CONTRACT_CONTROL,
+    TOOL_CONTRACT_HELDOUT,
     TOOL_CONTRACT_SEED,
     tool_contract_baseline_config,
 )
@@ -332,6 +334,31 @@ def regression(request: RegressionRequest) -> dict[str, object]:
 
     record["candidate_config"] = candidate_config
     record["regression_decision"] = decision
+    validation_groups = None
+    if tool_contract_run:
+        validation_groups = [
+            {
+                "id": "patch_derivation",
+                "case_ids": [TOOL_CONTRACT_SEED.test_case.id],
+            },
+            {
+                "id": "held_out_validation",
+                "case_ids": [
+                    scenario.test_case.id for scenario in TOOL_CONTRACT_HELDOUT
+                ],
+            },
+            {
+                "id": "negative_control",
+                "case_ids": [TOOL_CONTRACT_CONTROL.test_case.id],
+            },
+            {
+                "id": "frozen_existing_capability",
+                "case_ids": [
+                    scenario.test_case.id for scenario in COMMERCE_SCENARIOS
+                ],
+            },
+        ]
+
     return {
         "status": "completed",
         "patch": patch_value.model_dump(mode="json"),
@@ -341,6 +368,7 @@ def regression(request: RegressionRequest) -> dict[str, object]:
         "baseline_evaluations": [item.model_dump(mode="json") for item in baseline_evaluations],
         "candidate_traces": [trace.model_dump(mode="json") for trace in candidate_traces],
         "candidate_evaluations": [item.model_dump(mode="json") for item in candidate_evaluations],
+        "validation_groups": validation_groups,
         "regression_decision": decision.model_dump(mode="json"),
     }
 
