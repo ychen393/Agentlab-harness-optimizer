@@ -15,6 +15,13 @@ from app.targets.commerce.agent import CommerceAgent
 from app.targets.commerce.config import commerce_v1_config
 from app.targets.commerce.evaluator import evaluate_commerce
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
+from app.targets.commerce.tool_contract_demo import (
+    TOOL_CONTRACT_CASES,
+    TOOL_CONTRACT_CONTROL,
+    TOOL_CONTRACT_HELDOUT,
+    TOOL_CONTRACT_SEED,
+    build_tool_contract_repair_proof,
+)
 from app.debugger.failure_classifier import analyze_failures
 from app.debugger.root_cause import analyze_root_cause
 from app.demo_evidence import build_demo_evidence
@@ -75,6 +82,66 @@ def _serialize_benchmark_scenario(scenario: object, family: str) -> dict[str, ob
         "scenario_id": scenario.id,
         "test_case": scenario.test_case.model_dump(mode="json"),
         "ground_truth": scenario.ground_truth.model_dump(mode="json"),
+    }
+
+
+@app.get("/api/demo/tool-contract")
+def tool_contract_demo() -> dict[str, object]:
+    """Expose the controlled seed/held-out tool-contract repair evidence."""
+
+    proof = build_tool_contract_repair_proof()
+    baseline_by_id = {
+        item.test_id: item for item in proof.baseline_evaluations
+    }
+    candidate_by_id = {
+        item.test_id: item for item in proof.candidate_evaluations
+    }
+    baseline_trace_by_id = {
+        item.test_id: item for item in proof.baseline_traces
+    }
+    candidate_trace_by_id = {
+        item.test_id: item for item in proof.candidate_traces
+    }
+
+    def case_row(scenario: object, role: str) -> dict[str, object]:
+        test_id = scenario.test_case.id
+        baseline_trace = baseline_trace_by_id[test_id]
+        candidate_trace = candidate_trace_by_id[test_id]
+        return {
+            "role": role,
+            "scenario_id": scenario.id,
+            "test_case": scenario.test_case.model_dump(mode="json"),
+            "baseline": {
+                "passed": baseline_by_id[test_id].passed,
+                "tool_calls": baseline_trace.tool_calls,
+                "tool_call_arguments": baseline_trace.tool_call_arguments,
+                "error": baseline_trace.error,
+            },
+            "candidate": {
+                "passed": candidate_by_id[test_id].passed,
+                "tool_calls": candidate_trace.tool_calls,
+                "tool_call_arguments": candidate_trace.tool_call_arguments,
+                "error": candidate_trace.error,
+            },
+        }
+
+    return {
+        "evidence_boundary": "provider_independent_controlled_routing_experiment",
+        "claim": (
+            "One TD1-derived bounded tool-description repair is validated on "
+            "held-out requests sharing the same registered tool contract."
+        ),
+        "seed": case_row(TOOL_CONTRACT_SEED, "patch_derivation"),
+        "held_out": [
+            case_row(scenario, "held_out_validation")
+            for scenario in TOOL_CONTRACT_HELDOUT
+        ],
+        "control": case_row(TOOL_CONTRACT_CONTROL, "negative_control"),
+        "failure_pattern": proof.failure_pattern.model_dump(mode="json"),
+        "root_cause": proof.root_cause.model_dump(mode="json"),
+        "patch": proof.patch.model_dump(mode="json"),
+        "regression_decision": proof.regression_decision.model_dump(mode="json"),
+        "case_ids": [scenario.test_case.id for scenario in TOOL_CONTRACT_CASES],
     }
 
 
