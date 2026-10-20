@@ -33,6 +33,13 @@ def test_td1_alone_derives_tool_description_patch_from_real_contract_evidence() 
     assert proof.root_cause.metadata["tool_name"] == "search_products"
     assert proof.root_cause.metadata["missing_required_arguments"] == ["query"]
     assert proof.root_cause.metadata["unexpected_arguments"] == ["product_name"]
+    assert proof.root_cause.metadata["argument_contract_exposed_in_description"] is False
+    assert "Arguments:" not in proof.root_cause.metadata["current_tool_description"]
+    assert "not exposed in the model-facing tool description" in proof.root_cause.root_cause
+    assert any(
+        line.startswith("registered argument schema:")
+        for line in proof.root_cause.evidence
+    )
 
     assert proof.patch.target_component == "tool_description"
     assert proof.patch.old_value["name"] == "search_products"
