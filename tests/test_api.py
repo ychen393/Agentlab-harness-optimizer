@@ -1,6 +1,6 @@
 from pydantic import ValidationError
 
-from api.main import DiagnoseRequest, PatchRequest, RegressionRequest, RunRequest, benchmarks, diagnose, failures, patch, patches, regression, regressions, run, runs
+from api.main import DiagnoseRequest, PatchRequest, RegressionRequest, RunRequest, benchmarks, diagnose, failures, patch, patches, regression, regressions, run, runs, tool_contract_demo
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 
 
@@ -144,3 +144,41 @@ def test_session_history_endpoints_expose_real_accumulated_artifacts() -> None:
     assert any(item["run_id"] == body["run_id"] for item in failures()["failures"])
     assert any(item["run_id"] == body["run_id"] for item in patches()["patches"])
     assert any(item["run_id"] == body["run_id"] for item in regressions()["regressions"])
+
+
+
+def test_tool_contract_demo_exposes_seed_held_out_control_and_real_decision() -> None:
+    payload = tool_contract_demo()
+
+    assert payload["evidence_boundary"] == "provider_independent_controlled_routing_experiment"
+    assert payload["seed"]["test_case"]["id"] == "TD1"
+    assert payload["seed"]["baseline"]["passed"] is False
+    assert payload["seed"]["candidate"]["passed"] is True
+    assert payload["seed"]["baseline"]["tool_call_arguments"][0] == {
+        "product_name": "Find Running Shoes."
+    }
+    assert "query" in payload["seed"]["candidate"]["tool_call_arguments"][0]
+
+    assert [item["test_case"]["id"] for item in payload["held_out"]] == [
+        "TD2",
+        "TD3",
+        "TD4",
+    ]
+    assert all(item["baseline"]["passed"] is False for item in payload["held_out"])
+    assert all(item["candidate"]["passed"] is True for item in payload["held_out"])
+
+    assert payload["control"]["test_case"]["id"] == "TD5"
+    assert payload["control"]["baseline"]["passed"] is True
+    assert payload["control"]["candidate"]["passed"] is True
+
+    assert payload["failure_pattern"]["category"] == "tool_argument_schema_failure"
+    assert payload["root_cause"]["target_component"] == "tool_description"
+    assert payload["patch"]["target_component"] == "tool_description"
+    assert payload["regression_decision"]["improved_test_ids"] == [
+        "TD1",
+        "TD2",
+        "TD3",
+        "TD4",
+    ]
+    assert payload["regression_decision"]["regressed_test_ids"] == []
+    assert payload["regression_decision"]["decision"] == "accept"
