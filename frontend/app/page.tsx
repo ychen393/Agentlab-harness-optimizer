@@ -258,7 +258,21 @@ function humanRoot(language: Language, value: string): string {
   if (language !== "zh") return value;
   const lower = value.toLowerCase();
   if (lower.includes("workflow step budget")) return "工作流最大执行步数不足，导致必要的下一步工具调用无法继续执行。";
+  if (lower.includes("not exposed in the model-facing tool description")) return "Agent 已选择正确工具，但当前模型可见的 tool_description 没有显式暴露已注册参数契约，因此 Router 生成了未注册的参数键。";
   if (lower.includes("registered argument contract")) return "Agent 选择了正确工具，但实际参数不满足该工具已注册的参数契约。";
+  return value;
+}
+function humanEvidenceLine(language: Language, value: string): string {
+  if (language !== "zh") return value;
+  if (value.startsWith("selected tool:")) return value.replace("selected tool:", "已选择工具：");
+  if (value.startsWith("observed argument keys:")) return value.replace("observed argument keys:", "实际参数键：");
+  if (value.startsWith("required argument keys:")) return value.replace("required argument keys:", "注册契约要求的参数键：");
+  if (value.startsWith("registered argument schema:")) return value.replace("registered argument schema:", "已注册 argument_schema：");
+  if (value.startsWith("missing required arguments:")) return value.replace("missing required arguments:", "缺失必填参数：");
+  if (value.startsWith("unexpected arguments:")) return value.replace("unexpected arguments:", "未注册参数：");
+  if (value.startsWith("current tool description:")) return value.replace("current tool description:", "当前模型可见 tool_description：");
+  if (value.startsWith("required argument contract exposed in tool description: False")) return "tool_description 是否显式暴露必填参数契约：否";
+  if (value.startsWith("required argument contract exposed in tool description: True")) return "tool_description 是否显式暴露必填参数契约：是";
   return value;
 }
 function humanEvaluation(language: Language, value: string): string {
@@ -312,7 +326,7 @@ function Diagnosis({ language, diagnosis, trace, onPatch, patchLoading }: { lang
     trace.error ?? "",
   ].filter(Boolean);
   const evidenceLines = isToolContractFailure
-    ? (root?.evidence ?? [])
+    ? (root?.evidence ?? []).map(line => humanEvidenceLine(language, line))
     : [
         ...trace.tool_calls.map(tool => `✓ ${tool} ${t(language, "selectedCorrectly")}`),
         ...(lastResult ? [`→ ${lastResult}`] : []),
