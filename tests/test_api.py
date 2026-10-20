@@ -1,6 +1,6 @@
 from pydantic import ValidationError
 
-from api.main import DiagnoseRequest, PatchRequest, RegressionRequest, RunRequest, benchmarks, diagnose, failures, patch, patches, regression, regressions, run, runs, tool_contract_demo
+from api.main import DiagnoseRequest, PatchRequest, RegressionRequest, RunRequest, benchmarks, diagnose, failures, patch, patches, regression, regressions, run, runs
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 
 
@@ -147,38 +147,47 @@ def test_session_history_endpoints_expose_real_accumulated_artifacts() -> None:
 
 
 
-def test_tool_contract_demo_exposes_seed_held_out_control_and_real_decision() -> None:
-    payload = tool_contract_demo()
-
-    assert payload["evidence_boundary"] == "provider_independent_controlled_routing_experiment"
-    assert payload["seed"]["test_case"]["id"] == "TD1"
-    assert payload["seed"]["baseline"]["passed"] is False
-    assert payload["seed"]["candidate"]["passed"] is True
-    assert payload["seed"]["baseline"]["tool_call_arguments"][0] == {
-        "product_name": "Find Running Shoes."
-    }
-    assert "query" in payload["seed"]["candidate"]["tool_call_arguments"][0]
-
-    assert [item["test_case"]["id"] for item in payload["held_out"]] == [
-        "TD2",
-        "TD3",
-        "TD4",
+def test_tool_contract_case_uses_same_interactive_failure_repair_flow() -> None:
+    body = run(
+        RunRequest(
+            request="Find Running Shoes.",
+            scenario_id="TC_SEED",
+        )
+    )
+    assert body["test_id"] == "TD1"
+    assert body["agent_version"] == "commerce-v2"
+    assert body["tool_calls"] == ["search_products"]
+    assert body["tool_call_arguments"] == [
+        {"product_name": "Find Running Shoes."}
     ]
-    assert all(item["baseline"]["passed"] is False for item in payload["held_out"])
-    assert all(item["candidate"]["passed"] is True for item in payload["held_out"])
+    assert body["error"] == "product query is required"
+    assert body["evaluation_available"] is True
+    assert body["evaluation"]["passed"] is False
 
-    assert payload["control"]["test_case"]["id"] == "TD5"
-    assert payload["control"]["baseline"]["passed"] is True
-    assert payload["control"]["candidate"]["passed"] is True
+    diagnosis = diagnose(DiagnoseRequest(run_id=body["run_id"]))
+    assert diagnosis["status"] == "diagnosed"
+    assert diagnosis["failure_pattern"]["category"] == "tool_argument_schema_failure"
+    assert diagnosis["failure_pattern"]["affected_test_ids"] == ["TD1"]
+    assert diagnosis["root_cause"]["target_component"] == "tool_description"
+    assert diagnosis["root_cause"]["metadata"]["missing_required_arguments"] == ["query"]
+    assert diagnosis["root_cause"]["metadata"]["unexpected_arguments"] == ["product_name"]
 
-    assert payload["failure_pattern"]["category"] == "tool_argument_schema_failure"
-    assert payload["root_cause"]["target_component"] == "tool_description"
-    assert payload["patch"]["target_component"] == "tool_description"
-    assert payload["regression_decision"]["improved_test_ids"] == [
-        "TD1",
-        "TD2",
-        "TD3",
-        "TD4",
+    patch_payload = patch(PatchRequest(run_id=body["run_id"]))
+    assert patch_payload["status"] == "patch_ready"
+    assert patch_payload["patch"]["target_component"] == "tool_description"
+    assert patch_payload["patch"]["old_value"]["name"] == "search_products"
+    assert 'Arguments: {"query":"<string>"}.' in patch_payload["patch"]["proposed_value"]["description"]
+
+    result = regression(RegressionRequest(run_id=body["run_id"]))
+    decision = result["regression_decision"]
+    assert result["baseline_config"]["version"] == "commerce-v2"
+    assert result["candidate_config"]["version"] == "commerce-v3-tool-description"
+    assert [item["test_id"] for item in result["baseline_evaluations"]] == [
+        "CT1", "CT2", "CT3", "CT4", "CT5", "CT6", "CT7",
+        "TD1", "TD2", "TD3", "TD4", "TD5",
     ]
-    assert payload["regression_decision"]["regressed_test_ids"] == []
-    assert payload["regression_decision"]["decision"] == "accept"
+    assert decision["baseline_pass_count"] == 8
+    assert decision["candidate_pass_count"] == 12
+    assert decision["improved_test_ids"] == ["TD1", "TD2", "TD3", "TD4"]
+    assert decision["regressed_test_ids"] == []
+    assert decision["decision"] == "accept"
