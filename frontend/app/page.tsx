@@ -129,20 +129,89 @@ function ExecutionFailure({ language, trace, evaluation, evaluationAvailable, on
 function TimelineRow({ n, tool, label, status, argumentsText, result, ok = false }: { n: string; tool: string; label: string; status: string; argumentsText: string; result: string; ok?: boolean }) { return <div className="timeline-row"><div className={`timeline-dot ${ok ? "ok" : "pending"}`}>{ok ? <Check size={14} /> : n}</div><div className="tool-label"><b>{tool}</b><small>{label}</small><small>{argumentsText}</small></div><span className={`tool-result ${ok ? "success" : "pending-text"}`}>{status}</span><span className={`tool-result ${ok ? "success" : "pending-text"}`}>{result}</span></div>; }
 function formatArguments(value: Record<string, unknown>): string { return Object.entries(value).map(([key, item]) => `${key} = ${String(item)}`).join(", "); }
 function formatResult(value: unknown, language?: Language): string { if (Array.isArray(value) && value.length === 0) return language ? t(language, "noMatch") : "[]"; if (Array.isArray(value) && value[0] && typeof value[0] === "object" && "id" in value[0] && String((value[0] as { id?: unknown }).id).startsWith("POLICY_")) { const policy = value[0] as { id: string; starts_at?: string; ends_at?: string; min_amount?: number; gift?: string }; return language === "zh" ? `已找到适用政策：${policy.id}（${policy.starts_at ?? ""} 至 ${policy.ends_at ?? ""}，最低消费 ${policy.min_amount ?? "—"} 元，赠品 ${policy.gift ?? "—"}）` : `Applicable policy found: ${policy.id} (${policy.starts_at ?? ""} to ${policy.ends_at ?? ""}, minimum ${policy.min_amount ?? "—"}, gift ${policy.gift ?? "—"})`; } if (Array.isArray(value) && value[0] && typeof value[0] === "object" && "name" in value[0]) { const product = value[0] as { name?: string; price?: number; stock?: number }; const name = language === "zh" && product.name === "Running Shoes" ? "跑鞋（Running Shoes）" : product.name ?? "—"; return language === "zh" ? `商品：${name} · 价格 ${product.price ?? "—"} 元 · 库存 ${product.stock ?? "—"}` : `Product: ${name} · Price ${product.price ?? "—"} · Stock ${product.stock ?? "—"}`; } return typeof value === "string" ? value : JSON.stringify(value); }
-function humanRoot(language: Language, value: string): string { return language === "zh" && value.toLowerCase().includes("workflow step budget") ? "工作流最大执行步数不足，导致必要的资格检查无法继续执行。" : value; }
-function humanEvaluation(language: Language, value: string): string { if (language !== "zh") return value; const lower = value.toLowerCase(); if (lower.includes("all deterministic commerce checks passed")) return "所有确定性 Commerce 检查均通过。"; if (lower.includes("required eligibility decision")) return "任务未完成：尚未产生必要的赠品资格判断。"; if (lower.includes("required tool") && lower.includes("was not called")) return "任务未完成：必要工具 check_eligibility 未被调用，实际只执行了 search_policy。"; if (lower.includes("candidate improved") && lower.includes("no correctness regressions")) return "候选版本修复了失败案例，且没有新增正确性回退。"; return value; }
-function humanFailureCategory(language: Language, value: string): string { return language === "zh" && value === "workflow_step_limit" ? "工作流步数不足（workflow_step_limit）" : value; }
-function humanPatchText(language: Language, value: string): string { if (language !== "zh") return value; const lower = value.toLowerCase(); if (lower.includes("step-limit failure") || lower.includes("workflow step-limit failures")) return "重复 Trace 证明失败由工作流步数上限触发。"; if (lower.includes("allow the required workflow step")) return "允许执行被当前步数预算阻断的下一项必要工具调用。"; if (lower.includes("additional workflow step may increase latency") || lower.includes("additional step may increase latency")) return "增加一个执行步骤可能带来少量延迟或成本，并可能允许非必要工具调用。"; return value; }
+function humanRoot(language: Language, value: string): string {
+  if (language !== "zh") return value;
+  const lower = value.toLowerCase();
+  if (lower.includes("workflow step budget")) return "工作流最大执行步数不足，导致必要的下一步工具调用无法继续执行。";
+  if (lower.includes("registered argument contract")) return "Agent 选择了正确工具，但实际参数不满足该工具已注册的参数契约。";
+  return value;
+}
+function humanEvaluation(language: Language, value: string): string {
+  if (language !== "zh") return value;
+  const lower = value.toLowerCase();
+  if (lower.includes("all deterministic commerce checks passed")) return "所有确定性 Commerce 检查均通过。";
+  if (lower.includes("required eligibility decision")) return "任务未完成：尚未产生必要的赠品资格判断。";
+  if (lower.includes("required tool") && lower.includes("was not called")) return "任务未完成：必要工具没有按预期执行。";
+  if (lower.includes("candidate improved") && lower.includes("no correctness regressions")) return "候选版本修复了失败案例，且没有新增正确性回退。";
+  if (lower.includes("expected execution success") && lower.includes("error")) return "执行失败：工具调用参数无法满足当前工具要求。";
+  return value;
+}
+function humanFailureCategory(language: Language, value: string): string {
+  if (language !== "zh") return value;
+  if (value === "workflow_step_limit") return "工作流步数不足（workflow_step_limit）";
+  if (value === "tool_argument_schema_failure") return "工具参数契约不匹配（tool_argument_schema_failure）";
+  return value;
+}
+function humanPatchText(language: Language, value: string): string {
+  if (language !== "zh") return value;
+  const lower = value.toLowerCase();
+  if (lower.includes("step-limit failure") || lower.includes("workflow step-limit failures")) return "Trace 证明失败由工作流步数上限触发。";
+  if (lower.includes("allow the required workflow step")) return "允许执行被当前步数预算阻断的下一项必要工具调用。";
+  if (lower.includes("additional workflow step may increase latency") || lower.includes("additional step may increase latency")) return "增加一个执行步骤可能带来少量延迟或成本，并可能允许非必要工具调用。";
+  if (lower.includes("violating the registered contract")) return "Trace 证明 Agent 已选择正确工具，但提交的参数键违反了该工具的已注册参数契约。";
+  if (lower.includes("make the registered argument contract explicit")) return "在现有工具说明中显式补充参数格式，让 Router 能按照已注册契约生成参数。";
+  if (lower.includes("undocumented aliases")) return "更严格的参数说明可能降低对未文档化别名的兼容性，因此需要回归验证。";
+  return value;
+}
+function patchValueSummary(value: Record<string, unknown>): string {
+  if (typeof value.max_steps === "number") return `max_steps = ${value.max_steps}`;
+  if (typeof value.name === "string" && typeof value.description === "string") return `${value.name} · tool description`;
+  if (typeof value.system_prompt === "string") return "system_prompt";
+  return Object.keys(value).join(", ") || "—";
+}
 function TraceEvidence({ language, trace }: { language: Language; trace: import("../types/contracts").ExecutionTrace }) { return <div className="trace-evidence"><div><b>{t(language, "runId")}</b><span>{trace.test_id}</span></div><div><b>{t(language, "agentVersionLabel")}</b><span>{trace.agent_version}</span></div><div><b>{t(language, "toolCalls")}</b><code>{JSON.stringify(trace.tool_events ?? [], null, 2)}</code></div><div><b>{t(language, "arguments")}</b><code>{JSON.stringify(trace.tool_call_arguments ?? [], null, 2)}</code></div><div><b>{t(language, "toolOutput")}</b><code>{trace.output || "—"}</code></div><div><b>{t(language, "latency")}</b><span>{trace.latency_seconds == null ? "—" : `${trace.latency_seconds.toFixed(6)}s`}</span></div><div><b>{t(language, "traceError")}</b><code>{trace.error ?? t(language, "noError")}</code></div></div>; }
 function Diagnosis({ language, diagnosis, trace, onPatch, patchLoading }: { language: Language; diagnosis: DiagnosisResponse; trace: import("../types/contracts").ExecutionTrace; onPatch: () => void; patchLoading: boolean }) {
   const evaluation = diagnosis.evaluation;
   const pattern = diagnosis.failure_pattern;
   const root = diagnosis.root_cause;
   const nextTool = trace.error?.match(/for ([a-z_]+)/i)?.[1] ?? null;
-  const policyEvent = (trace.tool_events ?? []).find(event => event.tool_name === "search_policy");
-  const policyResult = policyEvent?.result === undefined ? null : formatResult(policyEvent.result, language);
+  const isToolContractFailure = pattern?.category === "tool_argument_schema_failure";
+  const lastEvent = (trace.tool_events ?? []).at(-1);
+  const lastResult = lastEvent?.error ?? (lastEvent?.result !== undefined ? formatResult(lastEvent.result, language) : null);
   const failedRules = Object.entries(evaluation?.rule_scores ?? {}).filter(([, score]) => score < 1).map(([name, score]) => `${name}: ${score}`);
-  return <section className="card diagnosis-card"><CardHeading number="3" title={t(language, "diagnosis")}><span className="status-pill red">{t(language, "failureTransition")}</span></CardHeading><div className="chain"><ChainCard n="1" title="Execution Trace" lines={[...trace.tool_calls.map(tool => `${tool} ✓`), policyResult ? `${language === "zh" ? "结果" : "Result"}: ${policyResult}` : "Result: —", nextTool ? `${nextTool}: ${t(language, "stepNotReached")}` : "", trace.error ?? ""].filter(Boolean)} /><ArrowRight className="chain-arrow" /><ChainCard n="2" title="Evaluation" lines={[evaluation?.passed ? t(language, "pass") : t(language, "taskIncompleteChain"), humanEvaluation(language, evaluation?.explanation ?? "—"), ...failedRules]} /><ArrowRight className="chain-arrow" /><ChainCard n="3" title="Failure Pattern" lines={[humanFailureCategory(language, pattern?.category ?? "—"), `${t(language, "affected")}: ${pattern?.affected_test_ids.join(", ") || "—"}`, `${language === "zh" ? "严重程度" : "Severity"}: ${language === "zh" && pattern?.severity === "medium" ? "中" : pattern?.severity ?? "—"}`]} /><ArrowRight className="chain-arrow" /><ChainCard n="4" title="Root Cause" lines={[humanRoot(language, root?.root_cause ?? "—"), `${t(language, "targetLabel")}${root?.target_component ?? "—"}`, `${t(language, "confidenceLabel")}${root?.confidence ?? "—"}`]} /></div><div className="evidence-grid"><div className="evidence-box"><h3>⌁ {t(language, "evidence")}</h3><ul>{trace.tool_calls.map(tool => <li key={tool}>✓ {tool} {t(language, "selectedCorrectly")}</li>)}{policyResult && <li>✓ {t(language, "returnedSuccessfully")}: {policyResult}</li>}{nextTool && <li>✓ {nextTool} {t(language, "wasNotExecuted")}</li>}{trace.error && <li>→ {t(language, "blockedByWorkflow")}: {trace.error}</li>}</ul></div><div className="impact-box"><h3>{t(language, "affectedScope")}</h3><div className="case-pills">{(pattern?.affected_test_ids ?? []).map(id => <span key={id} className="bad">× {id}</span>)}</div></div></div><div className="card-actions"><button className="secondary">▣ {t(language, "fullEvidence")}</button><button className="primary" disabled={patchLoading} onClick={onPatch}>{patchLoading ? t(language, "patchLoading") : t(language, "viewPatch")} <ArrowRight size={16} /></button></div></section>;
+  const executionLines = [
+    ...trace.tool_calls.map(tool => `${tool} ✓`),
+    trace.tool_call_arguments?.length ? `${language === "zh" ? "实际参数" : "Observed arguments"}: ${formatArguments(trace.tool_call_arguments.at(-1) ?? {})}` : "",
+    lastResult ? `${language === "zh" ? "结果" : "Result"}: ${lastResult}` : "",
+    nextTool ? `${nextTool}: ${t(language, "stepNotReached")}` : "",
+    trace.error ?? "",
+  ].filter(Boolean);
+  const evidenceLines = isToolContractFailure
+    ? (root?.evidence ?? [])
+    : [
+        ...trace.tool_calls.map(tool => `✓ ${tool} ${t(language, "selectedCorrectly")}`),
+        ...(lastResult ? [`→ ${lastResult}`] : []),
+        ...(nextTool ? [`✓ ${nextTool} ${t(language, "wasNotExecuted")}`] : []),
+        ...(trace.error ? [`→ ${trace.error}`] : []),
+      ];
+
+  return <section className="card diagnosis-card">
+    <CardHeading number="3" title={t(language, "diagnosis")}><span className="status-pill red">{t(language, "failureTransition")}</span></CardHeading>
+    <div className="chain">
+      <ChainCard n="1" title="Execution Trace" lines={executionLines} />
+      <ArrowRight className="chain-arrow" />
+      <ChainCard n="2" title="Evaluation" lines={[evaluation?.passed ? t(language, "pass") : t(language, "taskIncompleteChain"), humanEvaluation(language, evaluation?.explanation ?? "—"), ...failedRules]} />
+      <ArrowRight className="chain-arrow" />
+      <ChainCard n="3" title="Failure Pattern" lines={[humanFailureCategory(language, pattern?.category ?? "—"), `${t(language, "affected")}: ${pattern?.affected_test_ids.join(", ") || "—"}`, `${language === "zh" ? "严重程度" : "Severity"}: ${language === "zh" && pattern?.severity === "medium" ? "中" : pattern?.severity ?? "—"}`]} />
+      <ArrowRight className="chain-arrow" />
+      <ChainCard n="4" title="Root Cause" lines={[humanRoot(language, root?.root_cause ?? "—"), `${t(language, "targetLabel")}${root?.target_component ?? "—"}`, `${t(language, "confidenceLabel")}${root?.confidence ?? "—"}`]} />
+    </div>
+    <div className="evidence-grid">
+      <div className="evidence-box"><h3>⌁ {t(language, "evidence")}</h3><ul>{evidenceLines.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ul></div>
+      <div className="impact-box"><h3>{t(language, "affectedScope")}</h3><div className="case-pills">{(pattern?.affected_test_ids ?? []).map(id => <span key={id} className="bad">× {id}</span>)}</div></div>
+    </div>
+    <div className="card-actions"><button className="secondary">▣ {t(language, "fullEvidence")}</button><button className="primary" disabled={patchLoading} onClick={onPatch}>{patchLoading ? t(language, "patchLoading") : t(language, "viewPatch")} <ArrowRight size={16} /></button></div>
+  </section>;
 }
 function ChainCard({ n, title, lines }: { n: string; title: string; lines: string[] }) { return <div className="chain-card"><div className="chain-number">{n}</div><h4>{title}</h4>{lines.map(line => <p key={line}>{line}</p>)}</div>; }
 function PatchReady({ language, patch, failurePattern, rootCause, regressionLoading, onApply, onBack }: { language: Language; patch: import("../types/contracts").HarnessPatch; failurePattern: import("../types/contracts").FailurePattern | null; rootCause: import("../types/contracts").RootCauseAnalysis | null; regressionLoading: boolean; onApply: () => void; onBack: () => void }) {
@@ -155,12 +224,29 @@ function Regression({ language, result, onReset }: { language: Language; result:
   return <><section className="card regression-summary"><CardHeading number="1" title={t(language,"regressionSummary")}><span className={`status-pill ${decision.decision === "accept" ? "green" : "red"}`}>{decision.decision.toUpperCase()}</span></CardHeading><div className="reg-metrics"><Metric label={t(language,"baseline")} value={`${decision.baseline_pass_count} / ${decision.baseline_total}`} /><Metric label={t(language,"candidate")} value={`${decision.candidate_pass_count} / ${decision.candidate_total}`} good={decision.candidate_pass_count >= decision.baseline_pass_count} /><Metric label={t(language,"improvedCases")} value={String(decision.improved_test_ids.length)} good={decision.improved_test_ids.length > 0} /><Metric label={t(language,"regressions")} value={String(decision.regressed_test_ids.length)} bad={decision.regressed_test_ids.length > 0} /><Metric label={t(language,"decision")} value={decision.decision.toUpperCase()} good={decision.decision === "accept"} /></div><p className="muted-text">{humanEvaluation(language, decision.explanation)}</p></section><section className="card regression-table-card"><CardHeading number="2" title={t(language,"frozenComparison")}><span className="muted-text">{decision.baseline_version} → {decision.candidate_version}</span></CardHeading><table><thead><tr><th>{t(language,"test")}</th><th>{t(language,"baseline")}</th><th>{t(language,"candidate")}</th><th>{t(language,"change")}</th><th>{t(language,"explanation")}</th></tr></thead><tbody>{result.baseline_evaluations.map(item => { const candidate = candidateById.get(item.test_id); const changed = !candidate ? "—" : item.passed === candidate.passed ? t(language,"unchanged") : candidate.passed ? t(language,"improved") : t(language,"regressions"); return <tr key={item.test_id}><td><b>{item.test_id}</b></td><td><span className={`table-status ${item.passed ? "green-status" : "red-status"}`}>{item.passed ? "PASS" : "FAIL"}</span></td><td><span className={`table-status ${candidate?.passed ? "green-status" : "red-status"}`}>{candidate?.passed ? "PASS" : "FAIL"}</span></td><td className={changed === t(language,"improved") ? "green-text" : ""}>{changed}</td><td>{humanEvaluation(language, candidate?.explanation ?? "—")}</td></tr>; })}</tbody></table><div className="rate-banner">▥ {t(language,"passRate")} <b>{decision.baseline_pass_count} / {decision.baseline_total} → {decision.candidate_pass_count} / {decision.candidate_total}</b> · {t(language,"improved")} <b>{decision.improved_test_ids.length}</b> · {t(language,"regressions")} <b>{decision.regressed_test_ids.length}</b></div><div className="decision-banner"><Check size={22}/><div><b>{decision.decision.toUpperCase()}</b><span>{humanEvaluation(language, decision.explanation)}</span></div></div><div className="card-actions"><button className="secondary" onClick={onReset}>‹ {t(language,"finishRepair")}</button><button className="primary">▣ {t(language,"fullEvidence")}</button></div></section></>;
 }
 function CardHeading({ number, title, children }: { number: string; title: string; children?: React.ReactNode }) { return <div className="card-heading"><div className="heading-title"><span className="number">{number}</span><h2>{title}</h2></div>{children}</div>; }
-function RightRail({ language, state, trace }: { language: Language; state: WorkflowState; trace: import("../types/contracts").ExecutionTrace | null }) {
+function RightRail({ language, state, trace, patch, regression }: { language: Language; state: WorkflowState; trace: import("../types/contracts").ExecutionTrace | null; patch: import("../types/contracts").HarnessPatch | null; regression: RegressionResponse | null }) {
   const baselineVersion = trace?.agent_version ?? "commerce-v1";
-  const candidateVersion = "commerce-v2";
-  const maxSteps = trace?.error?.match(/workflow\.max_steps=?\s*(\d+)/i)?.[1] ?? (state === "patch_ready" || state === "validated" ? "3" : "2");
+  const candidateVersion = regression?.regression_decision.candidate_version ?? (patch?.target_component === "tool_description" ? "commerce-v3-tool-description" : "commerce-v2");
+  const maxSteps = trace?.error?.match(/workflow\.max_steps=?\s*(\d+)/i)?.[1] ?? (baselineVersion === "commerce-v2" ? "3" : "2");
   const surfaces = ["system_prompt", "tool_description", "context", "workflow_config"];
   const frozen = ["scenario", "ground truth", "evaluator", "benchmark", "model/router"];
   const currentStage = workflowStage(state);
-  return <aside className="right-rail"><section className="card rail-card harness-summary"><h3><Settings2 size={18}/> {state === "ready" ? t(language, "currentAgent") : t(language, "runOverview")}<span className="status-pill muted">{state === "validated" ? t(language, "decisionAccept") : t(language, "agentVersion")}</span></h3><div className="harness-section"><b>{t(language, "target")}</b><div className="harness-value"><span>{t(language, "targetAgentLabel")}</span><strong>Commerce Agent</strong></div><div className="harness-value"><span>{t(language, "agentVersion")}</span><strong>{state === "validated" ? `${baselineVersion} → ${candidateVersion}` : baselineVersion}</strong></div></div><div className="harness-section"><b>{t(language, "baseConfig")}</b>{state === "patch_ready" ? <div className="harness-compare"><span>{t(language, "baseline")}<strong>{baselineVersion}<br/>max_steps = 2</strong></span><b>→</b><span>{t(language, "candidate")}<strong>{candidateVersion}<br/>max_steps = 3</strong></span></div> : state === "validated" ? <div className="harness-value"><span>{t(language, "activeComparison")}</span><strong>{baselineVersion} → {candidateVersion}</strong></div> : <div className="harness-value"><span>workflow_config</span><strong>max_steps = {maxSteps}</strong></div>}{state === "validated" && <div className="harness-value"><span>{t(language, "changedField")}</span><strong>workflow_config.max_steps</strong></div>}</div><div className="harness-section"><b>{t(language, "editable")}</b><div className="surface-chips">{surfaces.map(surface => <span key={surface}>{surface}</span>)}</div></div><div className="harness-section"><b>{t(language, "frozen")}</b><div className="surface-chips frozen-chips">{frozen.map(item => <span key={item}>{item}</span>)}</div></div><Link className="config-link" href="/settings/agent">{t(language, "viewFullConfig")} <ArrowRight size={14}/></Link></section><section className="card rail-card"><h3><Wrench size={18}/> {t(language,"availableTools")}</h3>{["search_products","search_policy","check_eligibility"].map(name=><div className="tool-card" key={name}>{iconFor(name)}<div><b>{name}</b><small>{name==="search_products"?t(language,"searchProductsDesc"):name==="search_policy"?t(language,"searchPolicyDesc"):t(language,"checkEligibilityDesc")}</small></div></div>)}</section><section className="card rail-card next-card"><h3><ListChecks size={18}/> {t(language,"next")}</h3>{["run","evaluate","diagnose","repair","validate"].map((key,i)=><div key={key} className={`next-row ${i+1===currentStage?"current":i+1<currentStage?"done":""}`}><span>{i+1}</span>{t(language,key as "run"|"evaluate"|"diagnose"|"repair"|"validate")}</div>)}</section></aside>;
+  const changedSurface = patch?.target_component ?? null;
+  return <aside className="right-rail">
+    <section className="card rail-card harness-summary">
+      <h3><Settings2 size={18}/> {state === "ready" ? t(language, "currentAgent") : t(language, "runOverview")}<span className="status-pill muted">{state === "validated" ? t(language, "decisionAccept") : t(language, "agentVersion")}</span></h3>
+      <div className="harness-section"><b>{t(language, "target")}</b><div className="harness-value"><span>{t(language, "targetAgentLabel")}</span><strong>Commerce Agent</strong></div><div className="harness-value"><span>{t(language, "agentVersion")}</span><strong>{state === "validated" ? `${baselineVersion} → ${candidateVersion}` : baselineVersion}</strong></div></div>
+      <div className="harness-section"><b>{t(language, "baseConfig")}</b>
+        {patch && (state === "patch_ready" || state === "validated")
+          ? <><div className="harness-compare"><span>{t(language, "baseline")}<strong>{baselineVersion}<br/>{patchValueSummary(patch.old_value)}</strong></span><b>→</b><span>{t(language, "candidate")}<strong>{candidateVersion}<br/>{patchValueSummary(patch.proposed_value)}</strong></span></div><div className="harness-value"><span>{t(language, "changedField")}</span><strong>{changedSurface}</strong></div></>
+          : <div className="harness-value"><span>workflow_config</span><strong>max_steps = {maxSteps}</strong></div>}
+      </div>
+      <div className="harness-section"><b>{t(language, "editable")}</b><div className="surface-chips">{surfaces.map(surface => <span key={surface}>{surface}</span>)}</div></div>
+      <div className="harness-section"><b>{t(language, "frozen")}</b><div className="surface-chips frozen-chips">{frozen.map(item => <span key={item}>{item}</span>)}</div></div>
+      <Link className="config-link" href="/settings/agent">{t(language, "viewFullConfig")} <ArrowRight size={14}/></Link>
+    </section>
+    <section className="card rail-card"><h3><Wrench size={18}/> {t(language,"availableTools")}</h3>{["search_products","search_policy","check_eligibility"].map(name=><div className="tool-card" key={name}>{iconFor(name)}<div><b>{name}</b><small>{name==="search_products"?t(language,"searchProductsDesc"):name==="search_policy"?t(language,"searchPolicyDesc"):t(language,"checkEligibilityDesc")}</small></div></div>)}</section>
+    <section className="card rail-card next-card"><h3><ListChecks size={18}/> {t(language,"next")}</h3>{["run","evaluate","diagnose","repair","validate"].map((key,i)=><div key={key} className={`next-row ${i+1===currentStage?"current":i+1<currentStage?"done":""}`}><span>{i+1}</span>{t(language,key as "run"|"evaluate"|"diagnose"|"repair"|"validate")}</div>)}</section>
+  </aside>;
 }
+
