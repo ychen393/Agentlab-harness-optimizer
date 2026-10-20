@@ -181,6 +181,10 @@ def _analyze_tool_argument_schema_failure(
         properties, required = argument_contract_parts(contract)
         observed_keys = sorted(observed)
         required_keys = sorted(required)
+        description_exposes_contract = _description_exposes_required_arguments(
+            contract.description,
+            required_keys,
+        )
         evidence.extend(
             [
                 f"selected tool: {tool_name}",
@@ -188,6 +192,11 @@ def _analyze_tool_argument_schema_failure(
                 f"required argument keys: {required_keys}",
                 f"missing required arguments: {validation.missing_required_arguments}",
                 f"unexpected arguments: {validation.unexpected_arguments}",
+                f"current tool description: {contract.description}",
+                (
+                    "required argument contract exposed in tool description: "
+                    f"{description_exposes_contract}"
+                ),
             ]
         )
         observations.append(
@@ -195,20 +204,34 @@ def _analyze_tool_argument_schema_failure(
                 "tool_name": tool_name,
                 "observed_arguments": dict(observed),
                 "argument_schema": {"properties": properties, "required": required},
+                "current_tool_description": contract.description,
+                "required_argument_keys": required_keys,
+                "argument_contract_exposed_in_description": description_exposes_contract,
                 "missing_required_arguments": validation.missing_required_arguments,
                 "unexpected_arguments": validation.unexpected_arguments,
             }
         )
     first = observations[0]
+    description_gap = not bool(
+        first.get("argument_contract_exposed_in_description", False)
+    )
+    root_cause = (
+        "The selected tool is correct, but the registered argument contract is "
+        "not exposed in the model-facing tool description; the observed router "
+        "therefore supplied an undocumented argument key that violates the "
+        "registered contract."
+        if description_gap
+        else
+        "The selected tool's observed arguments violate its registered argument "
+        "contract even though the required argument keys are already exposed in "
+        "the tool description."
+    )
     return RootCauseAnalysis(
         failure_category=failure_pattern.category,
         evidence=evidence,
-        root_cause=(
-            "The selected tool's observed arguments do not satisfy its registered "
-            "argument contract."
-        ),
+        root_cause=root_cause,
         target_component="tool_description",
-        confidence=0.99,
+        confidence=0.99 if description_gap else 0.8,
         metadata=first,
     )
 
@@ -248,4 +271,17 @@ def _has_step_limit_evidence(error: str | None) -> bool:
     normalized = error.casefold()
     return "max_steps" in normalized and (
         "workflow" in normalized or "step" in normalized
+    )
+
+
+
+def _description_exposes_required_arguments(
+    description: str,
+    required_keys: list[str],
+) -> bool:
+    """Return whether the model-facing description explicitly names required keys."""
+
+    normalized = description.casefold()
+    return bool(required_keys) and "arguments:" in normalized and all(
+        key.casefold() in normalized for key in required_keys
     )
