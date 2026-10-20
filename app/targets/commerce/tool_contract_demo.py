@@ -119,9 +119,9 @@ class ContractSensitiveRouter:
             term in lowered for term in ("eligible", "eligibility", "qualify", "gift")
         )
         policy_match = re.search(r"policy_[a-z]", user_input, re.IGNORECASE)
-        date_match = re.search(r"\\d{4}-\\d{2}-\\d{2}", user_input)
+        date_match = re.search(r"\d{4}-\d{2}-\d{2}", user_input)
         amount_match = re.search(
-            r"(?:amount|spend|paid|for|total)\\s*(?:is|of|:)?\\s*(\\d+)",
+            r"(?:amount|spend|paid|for|total)\s*(?:is|of|:)?\s*(\d+)",
             lowered,
         )
 
