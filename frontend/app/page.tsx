@@ -116,10 +116,10 @@ export default function Home() {
 
   return <div className="app-shell">
     <header className="topbar"><Link className="brand" href="/"><div className="brand-mark">A</div><div><strong>AgentLab</strong><small>{t(language, "brandTagline")}</small></div></Link><nav className="topnav"><Link className="active" href="/">{t(language, "home")}</Link><Link href="/runs">{t(language, "runs")}</Link><Link href="/failures">{t(language, "failures")}</Link><Link href="/patches">{t(language, "patches")}</Link><Link className={isValidated ? "active" : ""} href="/regression">{t(language, "regression")}</Link></nav><div className="top-actions"><span className="select-pill">◉　{t(language, "target")}: <b>Commerce Agent</b>⌄</span><span className="select-pill">⚙　{t(language, "environment")}: <b>Demo</b>⌄</span><Globe2 size={21} color="#172554" /><div className="language"><button className={language === "zh" ? "selected" : ""} onClick={() => changeLanguage("zh")}>中文</button><button className={language === "en" ? "selected" : ""} onClick={() => changeLanguage("en")}>EN</button></div><div className="avatar">Y</div></div></header>
-    <aside className="sidebar"><div className="side-main"><SideItem href="/" active icon="⌂" label={t(language, "home")} /><SideItem href="/" icon="✦" label={t(language, "quickStart")} /></div><SideSection title={t(language, "templates")}><SideItem reloadDocument href="/?template=promo" icon="◈" label={t(language, "promo")} /><SideItem reloadDocument href="/?template=product" icon="▣" label={t(language, "product")} /><SideItem reloadDocument href="/?template=tool-contract" icon="⌘" label={t(language, "toolContractRepair")} /><SideItem reloadDocument href="/?template=order" icon="▤" label={t(language, "order")} /><SideItem reloadDocument href="/?template=returns" icon="▱" label={t(language, "returns")} /><SideItem reloadDocument href="/?template=custom" icon="□" label={t(language, "custom")} /></SideSection><SideSection title={t(language, "settings")}><SideItem href="/settings/agent" icon="✣" label={t(language, "config")} /><SideItem href="/settings/benchmarks" icon="▦" label={t(language, "tests")} /><SideItem href="/settings/evaluator" icon="✓" label={t(language, "evaluator")} /><SideItem href="/settings/data" icon="▤" label={t(language, "data")} /></SideSection><div className="sidebar-note"><b>AgentLab</b><span>{t(language, "sidebarNote")}</span></div></aside>
+    <aside className="sidebar"><div className="side-main"><SideItem href="/" active icon="⌂" label={t(language, "home")} /><SideItem href="/" icon="✦" label={t(language, "quickStart")} /></div><SideSection title={t(language, "templates")}><SideItem reloadDocument href="/?template=promo" icon="◈" label={t(language, "promo")} /><SideItem reloadDocument href="/?template=product" icon="▣" label={t(language, "product")} /><SideItem reloadDocument href="/?template=order" icon="▤" label={t(language, "order")} /><SideItem reloadDocument href="/?template=returns" icon="▱" label={t(language, "returns")} /><SideItem reloadDocument href="/?template=custom" icon="□" label={t(language, "custom")} /></SideSection><SideSection title={t(language, "settings")}><SideItem href="/settings/agent" icon="✣" label={t(language, "config")} /><SideItem href="/settings/benchmarks" icon="▦" label={t(language, "tests")} /><SideItem href="/settings/evaluator" icon="✓" label={t(language, "evaluator")} /><SideItem href="/settings/data" icon="▤" label={t(language, "data")} /></SideSection><div className="sidebar-note"><b>AgentLab</b><span>{t(language, "sidebarNote")}</span></div></aside>
     <main className="main"><Hero stage={stage} language={language} state={state} />
       <div className="columns"><div className="content">
-        {isReady && <ReadyCard language={language} request={request} activeTemplate={activeTemplate} editedRegisteredRequest={editedRegisteredRequest} setRequest={(value) => { if (activeTemplate && scenarioId) setEditedRegisteredRequest(true); setRequest(value); setScenarioId(null); setActiveTemplate(null); }} parsed={parsed} onRun={async () => { setRunError(null); setRunErrorTitle("taskIncomplete"); try { const result = await runCommerceRequest(request, scenarioId); setTrace(result); setRunId(result.run_id); setState(result.error ? "execution_failed" : "execution"); } catch (error) { setRunError(error instanceof Error ? error.message : String(error)); } }} onReset={() => resetToTemplate()} />}
+        {isReady && <ReadyCard language={language} request={request} activeTemplate={activeTemplate} productExperimentMode={productExperimentMode} onProductExperimentMode={selectProductExperiment} editedRegisteredRequest={editedRegisteredRequest} setRequest={(value) => { if (activeTemplate && scenarioId) setEditedRegisteredRequest(true); setRequest(value); setScenarioId(null); setActiveTemplate(null); }} parsed={parsed} onRun={async () => { setRunError(null); setRunErrorTitle("taskIncomplete"); try { const result = await runCommerceRequest(request, scenarioId); setTrace(result); setRunId(result.run_id); setState(result.error ? "execution_failed" : "execution"); } catch (error) { setRunError(error instanceof Error ? error.message : String(error)); } }} onReset={() => resetToTemplate()} />}
         {!isReady && <RequestSummary language={language} request={request} parsed={parsed} />}
         {isReady && <ExecutionWaiting language={language} />}
         {isFailure && trace && <ExecutionFailure language={language} trace={trace} evaluation={trace.evaluation ?? null} evaluationAvailable={trace.evaluation_available} onDiagnose={async () => { if (!runId) return; setDiagnosisLoading(true); setRunError(null); try { const result = await diagnoseRun(runId); if (result.status === "evaluation_unavailable") { setRunErrorTitle("evaluationUnavailable"); setRunError(t(language, "evaluationUnavailable")); } else if (result.status === "no_failure") { setRunErrorTitle("noFailureDetected"); setRunError(t(language, "noFailureDetected")); } else { setDiagnosis(result); setState("diagnosed"); } } catch (error) { setRunErrorTitle("taskIncomplete"); setRunError(error instanceof Error ? error.message : String(error)); } finally { setDiagnosisLoading(false); } }} onReset={() => resetToTemplate()} diagnosisLoading={diagnosisLoading} />}
@@ -130,7 +130,7 @@ export default function Home() {
         {isPatch && patchResult?.patch && <PatchReady language={language} patch={patchResult.patch} failurePattern={patchResult.failure_pattern} rootCause={patchResult.root_cause} regressionLoading={regressionLoading} onApply={async () => { if (!runId) return; setRegressionLoading(true); setRunError(null); try { const result = await runRegression(runId); setRegressionResult(result); setState("validated"); } catch (error) { setRunError(error instanceof Error ? error.message : String(error)); } finally { setRegressionLoading(false); } }} onBack={() => setState("diagnosed")} />}
         {isPatch && runError && <section className="card failure-card"><div className="error-box"><CircleAlert size={20} /><div><b>{t(language, "regressionFailed")}</b><span>{runError}</span></div></div></section>}
         {isValidated && regressionResult && <Regression language={language} result={regressionResult} onReset={() => resetToTemplate()} />}
-      </div><RightRail language={language} state={state} trace={trace} patch={patchResult?.patch ?? null} regression={regressionResult} /></div>
+      </div><RightRail language={language} state={state} trace={trace} patch={patchResult?.patch ?? null} regression={regressionResult} activeTemplate={activeTemplate} productExperimentMode={productExperimentMode} /></div>
     </main>
   </div>;
 }
@@ -150,7 +150,88 @@ function Hero({ language, state }: { stage: number; language: Language; state: W
   return <section className="hero"><div><h1>{title}</h1><p>{subtitle}</p></div><div className="progress experiment-pipeline">{steps.map(([label, detail], index) => <div className={`progress-step ${index + 1 < activeStage ? "done" : index + 1 === activeStage ? "current" : ""}`} key={label}><div className="step-circle">{index + 1 < activeStage ? <Check size={15} /> : index + 1}</div><div><b>{label}</b><small>{detail}</small></div>{index < steps.length - 1 && <ArrowRight size={17} className="progress-arrow" />}</div>)}</div></section>;
 }
 
-function ReadyCard({ language, request, activeTemplate, editedRegisteredRequest, setRequest, parsed, onRun, onReset }: { language: Language; request: string; activeTemplate: ScenarioTemplateId | null; editedRegisteredRequest: boolean; setRequest: (value: string) => void; parsed: RequestAnalysis; onRun: () => void; onReset: () => void }) { const template = activeTemplate ? SCENARIO_TEMPLATES[activeTemplate] : null; const registeredCase = template?.scenarioId && template.testCaseId ? template.testCaseId : null; return <><section className="card request-card"><CardHeading number="1" title={t(language, "request")}><div className="heading-actions"><button className="ghost">✧　{t(language, "sample")} <ChevronDown size={14} aria-hidden="true" /></button><button className="ghost" onClick={onReset}>{t(language, "clear")}</button></div></CardHeading>{registeredCase && <div className="request-context-status">{t(language, "registeredScenario")} · {registeredCase}</div>}{editedRegisteredRequest && <div className="request-context-notice">{t(language, "customRequestNotice")}</div>}{!registeredCase && !editedRegisteredRequest && activeTemplate === "custom" && <div className="request-context-status">{t(language, "customScenario")}</div>}<textarea value={request} onChange={(event) => setRequest(event.target.value)} maxLength={1000} /><div className="request-footer"><span>{request.length}/1000</span><button className="primary" onClick={onRun}><Play size={16} fill="currentColor" /> {t(language, "run")}</button><button className="secondary" onClick={onReset}><RotateCcw size={16} /> {t(language, "reset")}</button></div></section><ParsedCard language={language} parsed={parsed} request={request} /></>; }
+function ReadyCard({
+  language,
+  request,
+  activeTemplate,
+  productExperimentMode,
+  onProductExperimentMode,
+  editedRegisteredRequest,
+  setRequest,
+  parsed,
+  onRun,
+  onReset,
+}: {
+  language: Language;
+  request: string;
+  activeTemplate: ScenarioTemplateId | null;
+  productExperimentMode: ProductExperimentMode;
+  onProductExperimentMode: (mode: ProductExperimentMode) => void;
+  editedRegisteredRequest: boolean;
+  setRequest: (value: string) => void;
+  parsed: RequestAnalysis;
+  onRun: () => void;
+  onReset: () => void;
+}) {
+  const template = activeTemplate ? SCENARIO_TEMPLATES[activeTemplate] : null;
+  const productExperiment =
+    activeTemplate === "product" ? PRODUCT_EXPERIMENTS[productExperimentMode] : null;
+  const registeredCase = productExperiment?.testCaseId ?? (
+    template?.scenarioId && template.testCaseId ? template.testCaseId : null
+  );
+  const isProductScenario = activeTemplate === "product";
+
+  return <>
+    <section className="card request-card">
+      <CardHeading number="1" title={t(language, "request")}>
+        <div className="heading-actions">
+          <button className="ghost">✧　{t(language, "sample")} <ChevronDown size={14} aria-hidden="true" /></button>
+          <button className="ghost" onClick={onReset}>{t(language, "clear")}</button>
+        </div>
+      </CardHeading>
+
+      {isProductScenario && <div className="experiment-mode-panel">
+        <div>
+          <b>{t(language, "experimentMode")}</b>
+          <span>{t(language, "experimentModeBody")}</span>
+        </div>
+        <div className="experiment-mode-options" role="radiogroup" aria-label={t(language, "experimentMode")}>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={productExperimentMode === "normal"}
+            className={productExperimentMode === "normal" ? "selected" : ""}
+            onClick={() => onProductExperimentMode("normal")}
+          >
+            <strong>{t(language, "normalRun")}</strong>
+            <small>{t(language, "normalRunBody")}</small>
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={productExperimentMode === "tool_contract"}
+            className={productExperimentMode === "tool_contract" ? "selected" : ""}
+            onClick={() => onProductExperimentMode("tool_contract")}
+          >
+            <strong>{t(language, "faultReplay")}</strong>
+            <small>{t(language, "toolContractFaultBody")}</small>
+          </button>
+        </div>
+      </div>}
+
+      {registeredCase && <div className="request-context-status">{t(language, "registeredScenario")} · {registeredCase}</div>}
+      {editedRegisteredRequest && <div className="request-context-notice">{t(language, "customRequestNotice")}</div>}
+      {!registeredCase && !editedRegisteredRequest && activeTemplate === "custom" && <div className="request-context-status">{t(language, "customScenario")}</div>}
+      <textarea value={request} onChange={(event) => setRequest(event.target.value)} maxLength={1000} />
+      <div className="request-footer">
+        <span>{request.length}/1000</span>
+        <button className="primary" onClick={onRun}><Play size={16} fill="currentColor" /> {t(language, "run")}</button>
+        <button className="secondary" onClick={onReset}><RotateCcw size={16} /> {t(language, "reset")}</button>
+      </div>
+    </section>
+    <ParsedCard language={language} parsed={parsed} request={request} />
+  </>;
+}
 function RequestSummary({ language, request, parsed }: { language: Language; request: string; parsed: RequestAnalysis }) { return <><section className="card request-summary"><CardHeading number="1" title={t(language, "request")}><span className="status-pill muted">✓ {t(language, "executed")}</span></CardHeading><p>{request}</p></section><ParsedCard language={language} parsed={parsed} request={request} /></>; }
 function ParsedCard({ language, parsed, request }: { language: Language; parsed: RequestAnalysis; request: string }) { const productRequest = /跑鞋|running shoes/i.test(request); const items = productRequest ? [{ icon: "◉", label: t(language, "intent"), value: parsed.intent ?? "—" }, { icon: "◎", label: language === "zh" ? "标准化商品" : "Normalized product", value: language === "zh" ? "跑鞋" : "Running shoes" }, { icon: "◒", label: language === "zh" ? "可购买性" : "Availability", value: language === "zh" ? "仅展示有库存商品" : "In-stock products only" }, { icon: "▣", label: language === "zh" ? "输出形式" : "Output", value: language === "zh" ? "可购买商品列表" : "Purchasable product list" }] : [{ icon: "◉", label: t(language, "intent"), value: parsed.intent ?? "—" }, { icon: "◌", label: t(language, "amount"), value: parsed.amount ?? t(language, "notDetected") }, { icon: "□", label: t(language, "date"), value: parsed.paymentDate ?? t(language, "notDetected") }, { icon: "▣", label: t(language, "orderType"), value: parsed.orderType ?? t(language, "notDetected") }]; return <section className="card parsed-card"><CardHeading number="2" title={t(language, "parsed")}><button className="ghost">⟳　{t(language, "reparse")}</button></CardHeading><p className="muted-text">{t(language, "parsedDescription")}</p><div className="parsed-grid">{items.map(item => <div className="parsed-item" key={item.label}><span className="item-icon">{item.icon}</span><div><small>{item.label}</small><b>{item.value}</b></div></div>)}</div><div className="details"><ChevronDown size={16} /> {t(language, "details")}</div></section>; }
 function ExecutionWaiting({ language }: { language: Language }) { return <section className="card execution-wait"><CardHeading number="3" title={t(language, "execution")}><span className="ghost">◷　{t(language, "waiting")}</span></CardHeading><div className="empty-execution"><div className="empty-icon">⌁</div><div><b>{t(language, "waitingTitle")}</b><p>{t(language, "waitingBody")}</p></div><ArrowRight size={28} /></div></section>; }
