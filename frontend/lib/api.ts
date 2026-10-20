@@ -37,6 +37,10 @@ export interface RegressionResponse {
   baseline_evaluations: EvaluationResult[];
   candidate_traces: ExecutionTrace[];
   candidate_evaluations: EvaluationResult[];
+  validation_groups: Array<{
+    id: "patch_derivation" | "held_out_validation" | "negative_control" | "frozen_existing_capability";
+    case_ids: string[];
+  }> | null;
   regression_decision: import("../types/contracts").RegressionDecision;
 }
 
