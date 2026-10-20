@@ -76,43 +76,6 @@ export interface BenchmarkResponse {
 }
 
 
-export interface ToolContractCaseResult {
-  role: "patch_derivation" | "held_out_validation" | "negative_control";
-  scenario_id: string;
-  test_case: {
-    id: string;
-    input: string;
-    category: string;
-    difficulty: string;
-    requirement_ids: string[];
-  };
-  baseline: {
-    passed: boolean;
-    tool_calls: string[];
-    tool_call_arguments: Array<Record<string, unknown>>;
-    error: string | null;
-  };
-  candidate: {
-    passed: boolean;
-    tool_calls: string[];
-    tool_call_arguments: Array<Record<string, unknown>>;
-    error: string | null;
-  };
-}
-
-export interface ToolContractDemoResponse {
-  evidence_boundary: "provider_independent_controlled_routing_experiment";
-  claim: string;
-  seed: ToolContractCaseResult;
-  held_out: ToolContractCaseResult[];
-  control: ToolContractCaseResult;
-  failure_pattern: FailurePattern;
-  root_cause: RootCauseAnalysis & { metadata?: Record<string, unknown> };
-  patch: import("../types/contracts").HarnessPatch;
-  regression_decision: import("../types/contracts").RegressionDecision;
-  case_ids: string[];
-}
-
 export async function runCommerceRequest(request: string, scenarioId: string | null): Promise<RunResponse> {
   const response = await fetch(`${API_BASE_URL}/api/run`, {
     method: "POST",
@@ -170,12 +133,6 @@ export async function fetchBenchmarks(): Promise<BenchmarkResponse> {
   const response = await fetch(`${API_BASE_URL}/api/benchmarks`);
   if (!response.ok) throw new Error(`AgentLab benchmark API ${response.status}: ${await response.text()}`);
   return response.json() as Promise<BenchmarkResponse>;
-}
-
-export async function fetchToolContractDemo(): Promise<ToolContractDemoResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/demo/tool-contract`);
-  if (!response.ok) throw new Error(`AgentLab tool-contract demo API ${response.status}: ${await response.text()}`);
-  return response.json() as Promise<ToolContractDemoResponse>;
 }
 
 async function getJson<T>(path: string): Promise<T> {
