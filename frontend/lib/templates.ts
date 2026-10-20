@@ -1,6 +1,7 @@
 import type { Language } from "../types/contracts";
 
-export type ScenarioTemplateId = "promo" | "product" | "tool-contract" | "order" | "returns" | "custom";
+export type ScenarioTemplateId = "promo" | "product" | "order" | "returns" | "custom";
+export type ProductExperimentMode = "normal" | "tool_contract";
 
 export interface ScenarioTemplate {
   id: ScenarioTemplateId;
@@ -28,13 +29,6 @@ export const SCENARIO_TEMPLATES: Record<ScenarioTemplateId, ScenarioTemplate> = 
     testCaseId: null,
     support: "execution_only",
   },
-  "tool-contract": {
-    id: "tool-contract",
-    requests: { zh: "查找 Running Shoes。", en: "Find Running Shoes." },
-    scenarioId: "TC_SEED",
-    testCaseId: "TD1",
-    support: "registered",
-  },
   order: {
     id: "order",
     requests: { zh: "我的订单目前是什么状态？预计何时送达？", en: "What is the status of my order and when will it be delivered?" },
@@ -54,4 +48,38 @@ export const SCENARIO_TEMPLATES: Record<ScenarioTemplateId, ScenarioTemplate> = 
 
 export function requestForTemplate(id: ScenarioTemplateId, language: Language): string {
   return SCENARIO_TEMPLATES[id].requests[language];
+}
+
+
+export const PRODUCT_EXPERIMENTS: Record<ProductExperimentMode, {
+  id: ProductExperimentMode;
+  requests: Record<Language, string>;
+  scenarioId: string | null;
+  testCaseId: string | null;
+}> = {
+  normal: {
+    id: "normal",
+    requests: {
+      zh: "请查找跑鞋，并展示可购买的商品。",
+      en: "Find running shoes and show the available products.",
+    },
+    scenarioId: null,
+    testCaseId: null,
+  },
+  tool_contract: {
+    id: "tool_contract",
+    requests: {
+      zh: "查找 Running Shoes。",
+      en: "Find Running Shoes.",
+    },
+    scenarioId: "TC_SEED",
+    testCaseId: "TD1",
+  },
+};
+
+export function requestForProductExperiment(
+  mode: ProductExperimentMode,
+  language: Language,
+): string {
+  return PRODUCT_EXPERIMENTS[mode].requests[language];
 }
