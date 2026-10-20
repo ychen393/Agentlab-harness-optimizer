@@ -360,7 +360,86 @@ function Metric({ label, value, bad = false, blue = false, good = false }: { lab
 function Regression({ language, result, onReset }: { language: Language; result: RegressionResponse; onReset: () => void }) {
   const decision = result.regression_decision;
   const candidateById = new Map(result.candidate_evaluations.map(item => [item.test_id, item]));
-  return <><section className="card regression-summary"><CardHeading number="1" title={t(language,"regressionSummary")}><span className={`status-pill ${decision.decision === "accept" ? "green" : "red"}`}>{decision.decision.toUpperCase()}</span></CardHeading><div className="reg-metrics"><Metric label={t(language,"baseline")} value={`${decision.baseline_pass_count} / ${decision.baseline_total}`} /><Metric label={t(language,"candidate")} value={`${decision.candidate_pass_count} / ${decision.candidate_total}`} good={decision.candidate_pass_count >= decision.baseline_pass_count} /><Metric label={t(language,"improvedCases")} value={String(decision.improved_test_ids.length)} good={decision.improved_test_ids.length > 0} /><Metric label={t(language,"regressions")} value={String(decision.regressed_test_ids.length)} bad={decision.regressed_test_ids.length > 0} /><Metric label={t(language,"decision")} value={decision.decision.toUpperCase()} good={decision.decision === "accept"} /></div><p className="muted-text">{humanEvaluation(language, decision.explanation)}</p></section><section className="card regression-table-card"><CardHeading number="2" title={t(language,"frozenComparison")}><span className="muted-text">{decision.baseline_version} → {decision.candidate_version}</span></CardHeading><table><thead><tr><th>{t(language,"test")}</th><th>{t(language,"baseline")}</th><th>{t(language,"candidate")}</th><th>{t(language,"change")}</th><th>{t(language,"explanation")}</th></tr></thead><tbody>{result.baseline_evaluations.map(item => { const candidate = candidateById.get(item.test_id); const changed = !candidate ? "—" : item.passed === candidate.passed ? t(language,"unchanged") : candidate.passed ? t(language,"improved") : t(language,"regressions"); return <tr key={item.test_id}><td><b>{item.test_id}</b></td><td><span className={`table-status ${item.passed ? "green-status" : "red-status"}`}>{item.passed ? "PASS" : "FAIL"}</span></td><td><span className={`table-status ${candidate?.passed ? "green-status" : "red-status"}`}>{candidate?.passed ? "PASS" : "FAIL"}</span></td><td className={changed === t(language,"improved") ? "green-text" : ""}>{changed}</td><td>{humanEvaluation(language, candidate?.explanation ?? "—")}</td></tr>; })}</tbody></table><div className="rate-banner">▥ {t(language,"passRate")} <b>{decision.baseline_pass_count} / {decision.baseline_total} → {decision.candidate_pass_count} / {decision.candidate_total}</b> · {t(language,"improved")} <b>{decision.improved_test_ids.length}</b> · {t(language,"regressions")} <b>{decision.regressed_test_ids.length}</b></div><div className="decision-banner"><Check size={22}/><div><b>{decision.decision.toUpperCase()}</b><span>{humanEvaluation(language, decision.explanation)}</span></div></div><div className="card-actions"><button className="secondary" onClick={onReset}>‹ {t(language,"finishRepair")}</button><button className="primary">▣ {t(language,"fullEvidence")}</button></div></section></>;
+  const baselineById = new Map(result.baseline_evaluations.map(item => [item.test_id, item]));
+  const groups = result.validation_groups;
+  const toolContractProtocol = Boolean(groups?.length);
+
+  const groupSummary = groups ? Object.fromEntries(groups.map(group => {
+    const baselineItems = group.case_ids.map(id => baselineById.get(id)).filter(Boolean) as import("../types/contracts").EvaluationResult[];
+    const candidateItems = group.case_ids.map(id => candidateById.get(id)).filter(Boolean) as import("../types/contracts").EvaluationResult[];
+    return [group.id, {
+      total: group.case_ids.length,
+      baselinePass: baselineItems.filter(item => item.passed).length,
+      candidatePass: candidateItems.filter(item => item.passed).length,
+    }];
+  })) : {};
+
+  return <>
+    <section className="card regression-summary">
+      <CardHeading number="1" title={t(language,"regressionSummary")}>
+        <span className={`status-pill ${decision.decision === "accept" ? "green" : "red"}`}>{decision.decision.toUpperCase()}</span>
+      </CardHeading>
+      {toolContractProtocol && <div className="validation-protocol">
+        <ProtocolStep label={t(language, "seedFailureCount")} value="1" detail={language === "zh" ? "TD1 生成 Patch" : "TD1 derives the patch"} />
+        <ArrowRight size={18} />
+        <ProtocolStep label={t(language, "heldOutPassCount")} value={`${groupSummary.held_out_validation?.candidatePass ?? 0}/${groupSummary.held_out_validation?.total ?? 0}`} detail={language === "zh" ? "TD2–TD4 未参与诊断" : "TD2–TD4 unseen during diagnosis"} />
+        <ArrowRight size={18} />
+        <ProtocolStep label={t(language, "protectedPassCount")} value={`${groupSummary.frozen_existing_capability?.candidatePass ?? 0}/${groupSummary.frozen_existing_capability?.total ?? 0}`} detail="CT1–CT7" />
+        <ArrowRight size={18} />
+        <ProtocolStep label={t(language, "controlPassCount")} value={`${groupSummary.negative_control?.candidatePass ?? 0}/${groupSummary.negative_control?.total ?? 0}`} detail="TD5" />
+        <ArrowRight size={18} />
+        <ProtocolStep label={t(language, "regressions")} value={String(decision.regressed_test_ids.length)} detail={language === "zh" ? "新增回退" : "new regressions"} />
+      </div>}
+      <div className="reg-metrics">
+        <Metric label={t(language,"baseline")} value={`${decision.baseline_pass_count} / ${decision.baseline_total}`} />
+        <Metric label={t(language,"candidate")} value={`${decision.candidate_pass_count} / ${decision.candidate_total}`} good={decision.candidate_pass_count >= decision.baseline_pass_count} />
+        <Metric label={t(language,"improvedCases")} value={String(decision.improved_test_ids.length)} good={decision.improved_test_ids.length > 0} />
+        <Metric label={t(language,"regressions")} value={String(decision.regressed_test_ids.length)} bad={decision.regressed_test_ids.length > 0} />
+        <Metric label={t(language,"decision")} value={decision.decision.toUpperCase()} good={decision.decision === "accept"} />
+      </div>
+      <p className="muted-text">{humanEvaluation(language, decision.explanation)}</p>
+    </section>
+
+    <section className="card regression-table-card">
+      <CardHeading number="2" title={t(language,"frozenComparison")}>
+        <span className="muted-text">{decision.baseline_version} → {decision.candidate_version}</span>
+      </CardHeading>
+
+      {groups?.length ? groups.map(group => {
+        const meta = validationGroupMeta(language, group.id);
+        const rows = group.case_ids
+          .map(id => baselineById.get(id))
+          .filter(Boolean) as import("../types/contracts").EvaluationResult[];
+        return <section className="validation-group" key={group.id}>
+          <div className="validation-group-heading">
+            <div><b>{meta.title}</b><span>{meta.body}</span></div>
+            <span className="status-pill muted">{group.case_ids.join(", ")}</span>
+          </div>
+          <RegressionRows language={language} baselineItems={rows} candidateById={candidateById} />
+        </section>;
+      }) : <RegressionRows language={language} baselineItems={result.baseline_evaluations} candidateById={candidateById} />}
+
+      <div className="rate-banner">▥ {t(language,"passRate")} <b>{decision.baseline_pass_count} / {decision.baseline_total} → {decision.candidate_pass_count} / {decision.candidate_total}</b> · {t(language,"improved")} <b>{decision.improved_test_ids.length}</b> · {t(language,"regressions")} <b>{decision.regressed_test_ids.length}</b></div>
+      <div className="decision-banner"><Check size={22}/><div><b>{decision.decision.toUpperCase()}</b><span>{humanEvaluation(language, decision.explanation)}</span></div></div>
+      <div className="card-actions"><button className="secondary" onClick={onReset}>‹ {t(language,"finishRepair")}</button><button className="primary">▣ {t(language,"fullEvidence")}</button></div>
+    </section>
+  </>;
+}
+function ProtocolStep({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return <div className="protocol-step"><small>{label}</small><b>{value}</b><span>{detail}</span></div>;
+}
+function validationGroupMeta(language: Language, id: NonNullable<RegressionResponse["validation_groups"]>[number]["id"]): { title: string; body: string } {
+  if (id === "patch_derivation") return { title: t(language, "patchDerivationGroup"), body: t(language, "patchDerivationBody") };
+  if (id === "held_out_validation") return { title: t(language, "heldOutGroup"), body: t(language, "heldOutBody") };
+  if (id === "negative_control") return { title: t(language, "negativeControlGroup"), body: t(language, "negativeControlBody") };
+  return { title: t(language, "frozenCapabilityGroup"), body: t(language, "frozenCapabilityBody") };
+}
+function RegressionRows({ language, baselineItems, candidateById }: { language: Language; baselineItems: import("../types/contracts").EvaluationResult[]; candidateById: Map<string, import("../types/contracts").EvaluationResult> }) {
+  return <table><thead><tr><th>{t(language,"test")}</th><th>{t(language,"baseline")}</th><th>{t(language,"candidate")}</th><th>{t(language,"change")}</th><th>{t(language,"explanation")}</th></tr></thead><tbody>{baselineItems.map(item => {
+    const candidate = candidateById.get(item.test_id);
+    const changed = !candidate ? "—" : item.passed === candidate.passed ? t(language,"unchanged") : candidate.passed ? t(language,"improved") : t(language,"regressions");
+    return <tr key={item.test_id}><td><b>{item.test_id}</b></td><td><span className={`table-status ${item.passed ? "green-status" : "red-status"}`}>{item.passed ? "PASS" : "FAIL"}</span></td><td><span className={`table-status ${candidate?.passed ? "green-status" : "red-status"}`}>{candidate?.passed ? "PASS" : "FAIL"}</span></td><td className={changed === t(language,"improved") ? "green-text" : ""}>{changed}</td><td>{humanEvaluation(language, candidate?.explanation ?? "—")}</td></tr>;
+  })}</tbody></table>;
 }
 function CardHeading({ number, title, children }: { number: string; title: string; children?: React.ReactNode }) { return <div className="card-heading"><div className="heading-title"><span className="number">{number}</span><h2>{title}</h2></div>{children}</div>; }
 function RightRail({ language, state, trace, patch, regression, activeTemplate, productExperimentMode }: { language: Language; state: WorkflowState; trace: import("../types/contracts").ExecutionTrace | null; patch: import("../types/contracts").HarnessPatch | null; regression: RegressionResponse | null; activeTemplate: ScenarioTemplateId | null; productExperimentMode: ProductExperimentMode }) {
