@@ -112,7 +112,7 @@ class ContractSensitiveRouter:
 
     def __call__(self, prompt: str) -> str:
         self.prompts.append(prompt)
-        user_input = prompt.rsplit("User input: ", 1)[1]
+        user_input = prompt.rsplit("User input: ", 1)[1].strip()
         lowered = user_input.casefold()
 
         eligibility = any(
