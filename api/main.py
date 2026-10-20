@@ -16,11 +16,10 @@ from app.targets.commerce.config import commerce_v1_config
 from app.targets.commerce.evaluator import evaluate_commerce
 from app.targets.commerce.scenarios import COMMERCE_SCENARIOS
 from app.targets.commerce.tool_contract_demo import (
+    ContractSensitiveRouter,
     TOOL_CONTRACT_CASES,
-    TOOL_CONTRACT_CONTROL,
-    TOOL_CONTRACT_HELDOUT,
     TOOL_CONTRACT_SEED,
-    build_tool_contract_repair_proof,
+    tool_contract_baseline_config,
 )
 from app.debugger.failure_classifier import analyze_failures
 from app.debugger.root_cause import analyze_root_cause
@@ -72,7 +71,10 @@ app.add_middleware(
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
-_SCENARIOS = {scenario.id: scenario for scenario in COMMERCE_SCENARIOS}
+_SCENARIOS = {
+    scenario.id: scenario
+    for scenario in (*COMMERCE_SCENARIOS, TOOL_CONTRACT_SEED)
+}
 _RUNS: dict[str, dict[str, object]] = {}
 
 
@@ -82,66 +84,6 @@ def _serialize_benchmark_scenario(scenario: object, family: str) -> dict[str, ob
         "scenario_id": scenario.id,
         "test_case": scenario.test_case.model_dump(mode="json"),
         "ground_truth": scenario.ground_truth.model_dump(mode="json"),
-    }
-
-
-@app.get("/api/demo/tool-contract")
-def tool_contract_demo() -> dict[str, object]:
-    """Expose the controlled seed/held-out tool-contract repair evidence."""
-
-    proof = build_tool_contract_repair_proof()
-    baseline_by_id = {
-        item.test_id: item for item in proof.baseline_evaluations
-    }
-    candidate_by_id = {
-        item.test_id: item for item in proof.candidate_evaluations
-    }
-    baseline_trace_by_id = {
-        item.test_id: item for item in proof.baseline_traces
-    }
-    candidate_trace_by_id = {
-        item.test_id: item for item in proof.candidate_traces
-    }
-
-    def case_row(scenario: object, role: str) -> dict[str, object]:
-        test_id = scenario.test_case.id
-        baseline_trace = baseline_trace_by_id[test_id]
-        candidate_trace = candidate_trace_by_id[test_id]
-        return {
-            "role": role,
-            "scenario_id": scenario.id,
-            "test_case": scenario.test_case.model_dump(mode="json"),
-            "baseline": {
-                "passed": baseline_by_id[test_id].passed,
-                "tool_calls": baseline_trace.tool_calls,
-                "tool_call_arguments": baseline_trace.tool_call_arguments,
-                "error": baseline_trace.error,
-            },
-            "candidate": {
-                "passed": candidate_by_id[test_id].passed,
-                "tool_calls": candidate_trace.tool_calls,
-                "tool_call_arguments": candidate_trace.tool_call_arguments,
-                "error": candidate_trace.error,
-            },
-        }
-
-    return {
-        "evidence_boundary": "provider_independent_controlled_routing_experiment",
-        "claim": (
-            "One TD1-derived bounded tool-description repair is validated on "
-            "held-out requests sharing the same registered tool contract."
-        ),
-        "seed": case_row(TOOL_CONTRACT_SEED, "patch_derivation"),
-        "held_out": [
-            case_row(scenario, "held_out_validation")
-            for scenario in TOOL_CONTRACT_HELDOUT
-        ],
-        "control": case_row(TOOL_CONTRACT_CONTROL, "negative_control"),
-        "failure_pattern": proof.failure_pattern.model_dump(mode="json"),
-        "root_cause": proof.root_cause.model_dump(mode="json"),
-        "patch": proof.patch.model_dump(mode="json"),
-        "regression_decision": proof.regression_decision.model_dump(mode="json"),
-        "case_ids": [scenario.test_case.id for scenario in TOOL_CONTRACT_CASES],
     }
 
 
@@ -183,23 +125,40 @@ def run(request: RunRequest) -> dict[str, object]:
     if request.target != "commerce":  # defensive if the Literal grows later
         raise HTTPException(status_code=400, detail="unsupported target")
 
-    test_case = TestCase(
-        id=f"API-{uuid4().hex[:12]}",
-        input=request.request,
-        category="normal",
-        difficulty="medium",
-        requirement_ids=["API_REQUEST"],
-    )
-    config = commerce_v1_config()
-    trace = run_agent(test_case, config, CommerceAgent())
-    run_id = f"RUN-{uuid4().hex[:12]}"
     scenario = _SCENARIOS.get(request.scenario_id) if request.scenario_id else None
+    is_tool_contract_case = (
+        scenario is not None and scenario.id == TOOL_CONTRACT_SEED.id
+    )
+    test_case = TestCase(
+        id=scenario.test_case.id if is_tool_contract_case else f"API-{uuid4().hex[:12]}",
+        input=request.request,
+        category="tool_required" if is_tool_contract_case else "normal",
+        difficulty="medium",
+        requirement_ids=(
+            scenario.test_case.requirement_ids
+            if is_tool_contract_case
+            else ["API_REQUEST"]
+        ),
+    )
+
+    if is_tool_contract_case:
+        config = tool_contract_baseline_config()
+        target_agent = CommerceAgent(llm=ContractSensitiveRouter())
+        experiment_kind = "tool_contract"
+    else:
+        config = commerce_v1_config()
+        target_agent = CommerceAgent()
+        experiment_kind = "standard"
+
+    trace = run_agent(test_case, config, target_agent)
+    run_id = f"RUN-{uuid4().hex[:12]}"
     evaluation = evaluate_commerce(scenario, trace) if scenario is not None else None
     _RUNS[run_id] = {
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "request": request.request,
         "scenario_id": scenario.id if scenario is not None else None,
+        "experiment_kind": experiment_kind,
         "trace": trace,
         "config": config,
         "scenario": scenario,
@@ -319,7 +278,7 @@ def patch(request: PatchRequest) -> dict[str, object]:
 
 @app.post("/api/regression")
 def regression(request: RegressionRequest) -> dict[str, object]:
-    """Apply the stored bounded patch and compare the frozen CT1-CT7 suite."""
+    """Apply the stored bounded patch and compare the appropriate frozen suite."""
 
     record = _RUNS.get(request.run_id)
     if record is None:
@@ -329,12 +288,21 @@ def regression(request: RegressionRequest) -> dict[str, object]:
         raise HTTPException(status_code=409, detail="no generated HarnessPatch for run_id")
 
     baseline_config = record["config"]
+    tool_contract_run = record.get("experiment_kind") == "tool_contract"
+    candidate_version = (
+        "commerce-v3-tool-description" if tool_contract_run else "commerce-v2"
+    )
     try:
         candidate_config = apply_harness_patch(
-            baseline_config, patch_value, "commerce-v2"
+            baseline_config, patch_value, candidate_version
         )
-        scenarios = list(COMMERCE_SCENARIOS)
-        target_agent = CommerceAgent()
+        if tool_contract_run:
+            scenarios = [*COMMERCE_SCENARIOS, *TOOL_CONTRACT_CASES]
+            target_agent = CommerceAgent(llm=ContractSensitiveRouter())
+        else:
+            scenarios = list(COMMERCE_SCENARIOS)
+            target_agent = CommerceAgent()
+
         baseline_traces = run_benchmark(
             [scenario.test_case for scenario in scenarios],
             baseline_config,
