@@ -56,6 +56,7 @@ export interface RootCauseAnalysis {
   root_cause: string;
   target_component: "system_prompt" | "tool_description" | "context" | "workflow_config";
   confidence: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface HarnessPatch {
