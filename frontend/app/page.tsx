@@ -7,7 +7,7 @@ import { mockAgentLab, parseRequest } from "../lib/mock-agentlab";
 import { diagnoseRun, generatePatch, runCommerceRequest, runRegression, type DiagnosisResponse, type PatchResponse, type RegressionResponse } from "../lib/api";
 import { t, type TranslationKey } from "../i18n";
 import type { Language, RequestAnalysis, WorkflowState } from "../types/contracts";
-import { requestForTemplate, SCENARIO_TEMPLATES, type ScenarioTemplateId } from "../lib/templates";
+import { PRODUCT_EXPERIMENTS, requestForProductExperiment, requestForTemplate, SCENARIO_TEMPLATES, type ProductExperimentMode, type ScenarioTemplateId } from "../lib/templates";
 import { workflowStage } from "../lib/workflow";
 
 const iconFor = (name: string) => name === "search_policy" ? <FileCode2 size={18} /> : name === "check_eligibility" ? <ShieldCheck size={18} /> : <Wrench size={18} />;
@@ -16,6 +16,7 @@ export default function Home() {
   const [language, setLanguage] = useState<Language>("zh");
   const [request, setRequest] = useState(() => requestForTemplate("promo", "zh"));
   const [activeTemplate, setActiveTemplate] = useState<ScenarioTemplateId | null>("promo");
+  const [productExperimentMode, setProductExperimentMode] = useState<ProductExperimentMode>("normal");
   const [state, setState] = useState<WorkflowState>("ready");
   const [trace, setTrace] = useState<import("../types/contracts").ExecutionTrace | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -38,18 +39,37 @@ export default function Home() {
   const isValidated = state === "validated";
   const stage = workflowStage(state);
   useEffect(() => {
-    const template = new URLSearchParams(window.location.search).get("template") as ScenarioTemplateId | null;
+    const params = new URLSearchParams(window.location.search);
+    const template = params.get("template") as ScenarioTemplateId | null;
     if (!template || !SCENARIO_TEMPLATES[template]) return;
     const selected = SCENARIO_TEMPLATES[template];
-    setRequest(selected.requests.zh);
-    setScenarioId(selected.scenarioId);
+    const requestedExperiment = params.get("experiment");
+    const productMode: ProductExperimentMode =
+      template === "product" && requestedExperiment === "tool-contract"
+        ? "tool_contract"
+        : "normal";
+    setProductExperimentMode(productMode);
+    setRequest(
+      template === "product"
+        ? requestForProductExperiment(productMode, "zh")
+        : selected.requests.zh,
+    );
+    setScenarioId(
+      template === "product"
+        ? PRODUCT_EXPERIMENTS[productMode].scenarioId
+        : selected.scenarioId,
+    );
     setActiveTemplate(template);
     setEditedRegisteredRequest(false);
     if (template === "custom") window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("textarea")?.focus(), 0);
   }, []);
 
   const changeLanguage = (next: Language) => {
-    if (activeTemplate) setRequest(requestForTemplate(activeTemplate, next));
+    if (activeTemplate === "product") {
+      setRequest(requestForProductExperiment(productExperimentMode, next));
+    } else if (activeTemplate) {
+      setRequest(requestForTemplate(activeTemplate, next));
+    }
     setLanguage(next);
   };
 
@@ -64,10 +84,34 @@ export default function Home() {
     setRegressionResult(null);
     setRunError(null);
     setRunErrorTitle("taskIncomplete");
-    setScenarioId(selected.scenarioId);
+    setScenarioId(
+      resolved === "product"
+        ? PRODUCT_EXPERIMENTS[productExperimentMode].scenarioId
+        : selected.scenarioId,
+    );
     setActiveTemplate(resolved);
     setEditedRegisteredRequest(false);
-    setRequest(requestForTemplate(resolved, language));
+    setRequest(
+      resolved === "product"
+        ? requestForProductExperiment(productExperimentMode, language)
+        : requestForTemplate(resolved, language),
+    );
+  };
+
+  const selectProductExperiment = (mode: ProductExperimentMode) => {
+    setProductExperimentMode(mode);
+    setState("ready");
+    setTrace(null);
+    setRunId(null);
+    setDiagnosis(null);
+    setPatchResult(null);
+    setRegressionResult(null);
+    setRunError(null);
+    setRunErrorTitle("taskIncomplete");
+    setActiveTemplate("product");
+    setEditedRegisteredRequest(false);
+    setScenarioId(PRODUCT_EXPERIMENTS[mode].scenarioId);
+    setRequest(requestForProductExperiment(mode, language));
   };
 
   return <div className="app-shell">
