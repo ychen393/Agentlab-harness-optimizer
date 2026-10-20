@@ -190,6 +190,10 @@ def _analyze_tool_argument_schema_failure(
                 f"selected tool: {tool_name}",
                 f"observed argument keys: {observed_keys}",
                 f"required argument keys: {required_keys}",
+                (
+                    "registered argument schema: "
+                    f"{{'properties': {properties}, 'required': {required}}}"
+                ),
                 f"missing required arguments: {validation.missing_required_arguments}",
                 f"unexpected arguments: {validation.unexpected_arguments}",
                 f"current tool description: {contract.description}",
