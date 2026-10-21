@@ -365,6 +365,7 @@ function Regression({ language, result, onReset }: { language: Language; result:
   const candidateById = new Map(result.candidate_evaluations.map(item => [item.test_id, item]));
   const baselineById = new Map(result.baseline_evaluations.map(item => [item.test_id, item]));
   const groups = result.validation_groups;
+  // Preserve the experiment roles in the hosted UI: seed, held-out, control, and frozen capability.
   const toolContractProtocol = Boolean(groups?.length);
 
   const groupSummary = groups ? Object.fromEntries(groups.map(group => {
