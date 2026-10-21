@@ -147,3 +147,103 @@ body { background: var(--bg); }
   .experiment-pipeline .progress-arrow { margin: 0 4px; }
   .benchmark-groups { grid-template-columns: 1fr; }
 }
+
+
+/* R22 — compact evidence layout: keep desktop evidence on one line whenever space allows. */
+@media (min-width: 1051px) {
+  .timeline-row {
+    display: grid;
+    grid-template-columns: 27px minmax(220px, 280px) max-content minmax(260px, 1fr);
+    align-items: center;
+    column-gap: 12px;
+  }
+
+  .timeline-row .tool-label {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-areas:
+      "label label"
+      "tool args";
+    column-gap: 10px;
+    row-gap: 3px;
+  }
+
+  .timeline-row .tool-label small:first-of-type {
+    grid-area: label;
+    white-space: nowrap;
+  }
+
+  .timeline-row .tool-label b {
+    grid-area: tool;
+    white-space: nowrap;
+  }
+
+  .timeline-row .tool-label small:last-of-type {
+    grid-area: args;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .timeline-row .tool-result {
+    white-space: nowrap;
+    line-height: 1.35;
+  }
+
+  .timeline-row .tool-result-detail {
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.45;
+  }
+
+  .diagnosis-card .chain {
+    grid-template-columns:
+      minmax(0, 1.30fr) 18px
+      minmax(0, .96fr) 18px
+      minmax(0, 1.02fr) 18px
+      minmax(0, 1.22fr);
+    gap: 6px;
+  }
+
+  .diagnosis-card .chain-card {
+    min-width: 0;
+    padding: 14px 15px;
+  }
+
+  .diagnosis-card .chain-card h4 {
+    white-space: nowrap;
+    margin: 10px 0 9px;
+  }
+
+  .diagnosis-card .chain-card p {
+    margin: 3px 0;
+    line-height: 1.55;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .diagnosis-card .chain-card:nth-child(1) p:first-of-type,
+  .diagnosis-card .chain-card:nth-child(3) p:first-of-type,
+  .diagnosis-card .chain-card:nth-child(5) p:first-of-type {
+    white-space: nowrap;
+  }
+
+  .diagnosis-card .evidence-box li {
+    line-height: 1.55;
+  }
+}
+
+@media (max-width: 1050px) {
+  .timeline-row {
+    align-items: flex-start;
+  }
+
+  .timeline-row .tool-result {
+    white-space: normal;
+  }
+
+  .diagnosis-card .chain-card h4,
+  .diagnosis-card .chain-card p:first-of-type {
+    white-space: normal;
+  }
+}
